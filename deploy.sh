@@ -73,7 +73,8 @@ done
 # --- permissions, Pages, first run ---------------------------------------
 "$GH" api -X PUT "repos/$FULL/actions/permissions/workflow" -f default_workflow_permissions=write -F can_approve_pull_request_reviews=false >/dev/null
 "$GH" api -X POST "repos/$FULL/pages" -f build_type=workflow >/dev/null 2>&1 || true
-"$GH" workflow run check.yml -R "$FULL" >/dev/null 2>&1 || sleep 3 && "$GH" workflow run check.yml -R "$FULL" >/dev/null 2>&1 || true
+# Workflows register a few seconds after the first push; retry once.
+"$GH" workflow run check.yml -R "$FULL" >/dev/null 2>&1 || { sleep 6; "$GH" workflow run check.yml -R "$FULL" >/dev/null 2>&1 || true; }
 
 cat <<MSG
 

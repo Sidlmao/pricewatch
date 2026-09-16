@@ -79,43 +79,56 @@ The notifier is one small class (`pricewatch/notify/base.py`). Two are included:
 To add Telegram or anything else, subclass `Notifier`, implement `send(text)`, and add a
 branch in `get_notifier()`.
 
-## Scheduling with GitHub Actions
-
-1. Make this folder its own git repo and push it to GitHub (private is fine):
-   ```bash
-   git init && git add -A && git commit -m "pricewatch" && gh repo create pricewatch --private --source . --push
-   ```
-2. In the repo: **Settings > Secrets and variables > Actions**, add secrets
-   `TWILIO_SID`, `TWILIO_TOKEN`, `TWILIO_FROM`, `MY_PHONE`
-   (or `NTFY_TOPIC` plus a repository *variable* `NOTIFIER=ntfy`).
-3. **Settings > Actions > General > Workflow permissions**: choose *Read and write*, so
-   the workflow can commit the database.
-4. Open the **Actions** tab and run "price check" once by hand to confirm it works.
-
-From then on it runs every 6 hours. To change the interval, edit the single `cron:` line
-in `.github/workflows/check.yml` (GitHub's minimum is every 5 minutes; scheduled runs can
-lag by 10 to 15 minutes at busy times).
-
-### Adding items when the tracker runs on GitHub
-
-The database is the file `data/pricewatch.db`. The workflow commits its updates, so:
+## Deploy (one command)
 
 ```bash
-git pull                                  # get the latest history
-python check.py --add "https://..." --size M --target 60   # or use the web UI
-git commit -am "track new item" && git push
+cd pricewatch
+./deploy.sh
 ```
 
-If you push at the same moment a scheduled run pushes, one side has to re-pull. The
-workflow retries with `git pull --rebase` and keeps its own copy of the DB on conflict,
-so re-add the item if that ever happens. In practice, runs take about a minute.
+The first time, it installs the GitHub CLI if needed, opens a browser tab for you to log in
+to GitHub, creates a private repo called `pricewatch`, pushes the code, copies whatever is in
+your `.env` into the repo's secrets, and starts the first check. It prints three links when
+it's done:
+
+- **Dashboard**: `https://<you>.github.io/pricewatch/`, a read-only copy of the web page,
+  rebuilt after every check.
+- **Add / remove items**: the "manage items" workflow. Press *Run workflow*, paste a URL,
+  optional size and target, and it's tracked. Works from your phone. Remove or pause an
+  item by its `#` number from the dashboard.
+- **Runs & logs**: the Actions tab.
+
+If `.env` has no Twilio values yet, it sets up free push notifications through
+[ntfy.sh](https://ntfy.sh) instead: install the ntfy app and subscribe to the topic it
+prints. Add Twilio values to `.env` later, set `NOTIFIER=twilio`, and run `./deploy.sh`
+again to switch to SMS. Re-running the script is always safe; it just pushes and re-syncs.
+
+Checks run every 6 hours. To change that, edit the single `cron:` line in
+`.github/workflows/check.yml` (GitHub's minimum is every 5 minutes; scheduled runs can lag
+by 10 to 15 minutes at busy times).
+
+### Doing it by hand instead
+
+Push this folder to a GitHub repo, add the secrets `TWILIO_SID`, `TWILIO_TOKEN`,
+`TWILIO_FROM`, `MY_PHONE` (or `NTFY_TOPIC` plus a repository *variable* `NOTIFIER=ntfy`)
+under Settings > Secrets and variables > Actions, set Settings > Actions > General >
+Workflow permissions to *Read and write*, set Settings > Pages > Source to *GitHub Actions*,
+and run "price check" once from the Actions tab.
+
+### Why not Vercel / a normal host?
+
+Vercel-style platforms have no persistent disk (the SQLite file would vanish), can't run
+Playwright's Chromium (Zara and SSENSE would break), and their free cron runs once a day.
+GitHub Actions gives you a real Linux box with a browser for a minute every 6 hours, for
+free, and the repo itself is the storage.
 
 ### Committed SQLite vs a hosted database
 
 **Committed SQLite (what this uses).** Free, zero accounts, one file you can copy or open
 with any SQLite tool. The downsides: every run that records a price makes a commit (about
-4 a day, each a few KB, so the repo grows slowly forever), and the copy on your laptop is
-only as fresh as your last `git pull`. Fine for one person and a few dozen items.
+4 a day, each a few KB, so the repo grows slowly forever), and if you also run the local
+web UI, its copy is only as fresh as your last `git pull`. Fine for one person and a few
+dozen items.
 
 **Hosted DB (Turso, Supabase, Neon all have free tiers).** One live source of truth for
 both the workflow and your laptop, no commits, and the web UI could run anywhere. The
@@ -163,9 +176,11 @@ Register it in `EXTRACTORS` in `pricewatch/extractors/__init__.py`. The `nike.py
 ## Layout
 
 ```
-check.py                 CLI: run checks, --dry-run, --add/--list/--remove, --test-sms
+deploy.sh                one-command deploy to GitHub
+check.py                 CLI: run checks, --dry-run, --add/--list/--remove/--toggle, --test-sms
 scrape.py                debug one URL
 app.py + templates/      web UI (Flask, one page, server-rendered SVG chart)
+build_site.py            renders the same page statically for GitHub Pages
 pricewatch/
   fetch.py               user agents, delays, robots.txt, requests + Playwright
   prices.py              price string / currency parsing
@@ -174,5 +189,5 @@ pricewatch/
   extractors/            one file per store + generic fallback
   notify/                Notifier interface: twilio, ntfy, console
 data/pricewatch.db       the database (committed)
-.github/workflows/       the 6-hourly cron
+.github/workflows/       check.yml = the 6-hourly cron + dashboard, manage.yml = add/remove form
 ```
