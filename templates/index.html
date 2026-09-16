@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pricewatch</title>
+<style>
+  :root { --fg:#111; --muted:#777; --line:#e4e4e4; --bg:#fff; --ok:#1a7f37; --bad:#b42318; --accent:#2f5fd0; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:32px 16px 64px; background:var(--bg); color:var(--fg);
+         font:15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width:860px; margin:0 auto; }
+  h1 { font-size:20px; font-weight:600; margin:0 0 20px; }
+  form.add { display:grid; grid-template-columns: 1fr 90px 110px auto auto; gap:8px; align-items:center; margin-bottom:28px; }
+  form.add input[type=text], form.add input[type=number] { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px; font:inherit; }
+  form.add label.chk { font-size:13px; color:var(--muted); white-space:nowrap; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:6px; background:#fafafa; font:inherit; font-size:13px; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.link { border:none; background:none; color:var(--muted); padding:4px 6px; }
+  button.link:hover { color:var(--fg); }
+  .flash { background:#f4f7ff; border:1px solid #d9e2ff; padding:8px 12px; border-radius:6px; margin-bottom:16px; font-size:14px; }
+  .item { display:grid; grid-template-columns: 56px 1fr 180px auto; gap:16px; align-items:center;
+          padding:14px 0; border-top:1px solid var(--line); }
+  .item:last-child { border-bottom:1px solid var(--line); }
+  .item.paused { opacity:.5; }
+  .thumb { width:56px; height:56px; object-fit:cover; border-radius:6px; background:#f2f2f2; }
+  .name { font-weight:500; text-decoration:none; color:var(--fg); }
+  .name:hover { text-decoration:underline; }
+  .meta { color:var(--muted); font-size:13px; margin-top:2px; }
+  .price { font-size:17px; font-weight:600; }
+  .was { color:var(--muted); text-decoration:line-through; font-weight:400; font-size:13px; margin-left:6px; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); }
+  .actions { display:flex; gap:2px; }
+  .actions form { display:inline; }
+  svg.spark { display:block; }
+  .empty { color:var(--muted); padding:40px 0; text-align:center; }
+  .hint { color:var(--muted); font-size:13px; margin-top:24px; }
+  @media (max-width:640px) {
+    form.add { grid-template-columns:1fr 1fr; }
+    form.add input[name=url] { grid-column:1 / -1; }
+    .item { grid-template-columns:48px 1fr; }
+    .item .chartcell, .item .actions { grid-column:2; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>pricewatch</h1>
+
+  {% with messages = get_flashed_messages() %}{% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}{% endwith %}
+
+  {% if not static %}
+  <form class="add" method="post" action="{{ url_for('add') }}">
+    <input type="text" name="url" placeholder="Paste a product URL" required autofocus>
+    <input type="text" name="size" placeholder="Size">
+    <input type="number" name="target" placeholder="Target price" step="0.01" min="0">
+    <label class="chk"><input type="checkbox" name="restock" value="1"> restock alert</label>
+    <button class="primary" type="submit">Track</button>
+  </form>
+  {% endif %}
+
+  {% if not items %}<div class="empty">Nothing tracked yet.{% if not static %} Paste a product URL above.{% endif %}</div>{% endif %}
+
+  {% for it in items %}{% set r = it.row %}
+  <div class="item{% if not r.active %} paused{% endif %}">
+    {% if r.image_url %}<img class="thumb" src="{{ r.image_url }}" alt="">{% else %}<div class="thumb"></div>{% endif %}
+    <div>
+      <a class="name" href="{{ r.url }}" target="_blank" rel="noopener">{{ r.name or r.url }}</a>
+      <div class="meta">
+        {{ r.store or '' }}{% if r.size %} · size {{ r.size }}{% endif %}{% if it.target %} · target {{ it.target }}{% endif %}{% if r.notify_restock %} · restock alerts{% endif %}
+        · checked {{ it.checked }}
+        {% if r.fail_count %}<span class="bad"> · failing ({{ r.fail_count }}): {{ r.last_error }}</span>{% endif %}
+      </div>
+      <div class="meta">
+        {% if it.in_stock == 1 %}<span class="ok">in stock</span>{% elif it.in_stock == 0 %}<span class="bad">sold out</span>{% endif %}
+        {% if it.min %} · low {{ it.min }}{% endif %}
+        {% for a in it.alerts %} · {{ a.type.replace('_',' ') }} {{ ago(a.sent_at) }}{% endfor %}
+      </div>
+    </div>
+    <div class="chartcell">
+      {% if it.price %}<div class="price">{{ it.price }}{% if it.original %}<span class="was">{{ it.original }}</span>{% endif %}</div>{% else %}<div class="price" style="color:var(--muted)">–</div>{% endif %}
+      {% if it.chart %}{% set c = it.chart %}
+      <svg class="spark" width="{{ c.w }}" height="{{ c.h }}" viewBox="0 0 {{ c.w }} {{ c.h }}">
+        {% if c.target_y %}<line x1="0" y1="{{ c.target_y }}" x2="{{ c.w }}" y2="{{ c.target_y }}" stroke="#bbb" stroke-dasharray="3 3"/>{% endif %}
+        <polyline points="{{ c.points }}" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+        <circle cx="{{ c.last[0] }}" cy="{{ c.last[1] }}" r="2.5" fill="var(--accent)"/>
+      </svg>
+      {% endif %}
+    </div>
+    {% if not static %}
+    <div class="actions">
+      <form method="post" action="{{ url_for('check', item_id=r.id) }}"><button class="link" title="Check now">check</button></form>
+      <form method="post" action="{{ url_for('toggle', item_id=r.id) }}"><button class="link">{{ 'resume' if not r.active else 'pause' }}</button></form>
+      <form method="post" action="{{ url_for('remove', item_id=r.id) }}" onsubmit="return confirm('Remove this item and its history?')"><button class="link">remove</button></form>
+    </div>
+    {% else %}<div class="actions"><span class="meta">#{{ r.id }}</span></div>{% endif %}
+  </div>
+  {% endfor %}
+
+  {% if static %}
+  <p class="hint">Built {{ built_at }}. Checks run every 6 hours. Dashed line on the chart is your target price.
+  {% if manage_url %}<br>To add or remove items, use the <a href="{{ manage_url }}">manage items</a> workflow (the # is the item id).{% endif %}</p>
+  {% else %}
+  <p class="hint">Checks run every 6 hours via GitHub Actions. Dashed line on the chart is your target price.</p>
+  {% endif %}
+</main>
+</body>
+</html>

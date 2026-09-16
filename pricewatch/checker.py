@@ -1,0 +1,151 @@
+"""Check every active item once, record history, and send alerts (deduplicated via the alerts table)."""
+import logging
+import shutil
+import tempfile
+from typing import List, Optional
+
+from . import config, db
+from .extractors import scrape, ScrapeError, FetchError, RobotsDisallowed, stock_for_size, Fetcher
+from .notify import get_notifier, Notifier
+from .prices import fmt
+
+log = logging.getLogger("pricewatch.checker")
+
+
+def pct_off(old: Optional[float], new: Optional[float]) -> str:
+    if not old or new is None or old <= 0:
+        return ""
+    return f"{round((old - new) / old * 100)}% off"
+
+
+def _label(item) -> str:
+    name = item["name"] or item["url"]
+    return f"{name} (size {item['size']})" if item["size"] else name
+
+
+def build_message(kind: str, item, old_price, new_price, currency) -> str:
+    cur = currency or item["currency"]
+    if kind == "target_hit":
+        head = f"🎯 Target hit: {_label(item)}"
+        line = f"{fmt(old_price, cur)} -> {fmt(new_price, cur)}" if old_price else f"now {fmt(new_price, cur)}"
+        line += f" (target {fmt(item['target_price'], cur)}"
+        p = pct_off(old_price, new_price)
+        line += f", {p})" if p else ")"
+    elif kind == "price_drop":
+        head = f"📉 Price drop: {_label(item)}"
+        line = f"{fmt(old_price, cur)} -> {fmt(new_price, cur)}"
+        p = pct_off(old_price, new_price)
+        line += f" ({p})" if p else ""
+    elif kind == "restock":
+        head = f"📦 Back in stock: {_label(item)}"
+        line = f"{fmt(new_price, cur)}"
+    else:  # needs_attention
+        head = f"⚠️ Needs attention: {_label(item)}"
+        line = f"failed {config.FAIL_THRESHOLD} checks in a row: {item['last_error']}"
+    return f"{head}\n{line}\n{item['url']}"
+
+
+def check_item(conn, item, fetcher: Fetcher, notifier: Notifier) -> List[str]:
+    """Returns list of alert types sent for this item."""
+    sent = []
+    prev = db.last_checks(conn, item["id"], 1)
+    prev = prev[0] if prev else None
+    try:
+        info = scrape(item["url"], fetcher)
+    except (ScrapeError, FetchError, RobotsDisallowed) as e:
+        return _handle_failure(conn, item, str(e), notifier)
+
+    in_stock, _ = stock_for_size(info, item["size"])
+    db.record_price(conn, item["id"], info.price, in_stock, original_price=info.original_price)
+    meta = {"fail_count": 0, "last_error": None}
+    for k in ("name", "image_url", "store", "currency"):
+        if getattr(info, k) and not item[k]:
+            meta[k] = getattr(info, k)
+    db.update_item_meta(conn, item["id"], **meta)
+    item = db.get_item(conn, item["id"])
+    price, cur = info.price, info.currency or item["currency"]
+    prev_price = prev["price"] if prev else None
+    log.info("%s: %s%s | stock=%s", _label(item), fmt(price, cur),
+             f" (prev {fmt(prev_price, cur)})" if prev_price is not None else "", in_stock)
+
+    # --- price alerts ---------------------------------------------------
+    target = item["target_price"]
+    if target is not None:
+        if price is not None and price <= target:
+            last = db.last_alert(conn, item["id"], "target_hit")
+            # Alert if never alerted, if the price fell further since the last alert,
+            # or if the price went back above target in between and has now dropped again.
+            fresh = last is None or price < last["new_price"] or (prev_price is not None and prev_price > target)
+            if fresh:
+                old = prev_price if prev_price is not None else info.original_price
+                notifier.send(build_message("target_hit", item, old, price, cur))
+                db.record_alert(conn, item["id"], "target_hit", old, price)
+                sent.append("target_hit")
+    elif prev_price is not None and price is not None and price < prev_price:
+        last = db.last_alert(conn, item["id"], "price_drop")
+        if not (last and last["new_price"] == price and last["old_price"] == prev_price):
+            notifier.send(build_message("price_drop", item, prev_price, price, cur))
+            db.record_alert(conn, item["id"], "price_drop", prev_price, price)
+            sent.append("price_drop")
+
+    # --- restock alert --------------------------------------------------
+    if item["notify_restock"] and in_stock and prev is not None and prev["in_stock"] == 0:
+        last = db.last_alert(conn, item["id"], "restock")
+        if not (last and last["sent_at"] > prev["checked_at"]):
+            notifier.send(build_message("restock", item, None, price, cur))
+            db.record_alert(conn, item["id"], "restock", None, price)
+            sent.append("restock")
+    return sent
+
+
+def _handle_failure(conn, item, error: str, notifier: Notifier) -> List[str]:
+    count = (item["fail_count"] or 0) + 1
+    db.update_item_meta(conn, item["id"], fail_count=count, last_error=error[:300])
+    db.record_price(conn, item["id"], None, None)
+    log.warning("%s: check failed (%d/%d): %s", _label(item), count, config.FAIL_THRESHOLD, error)
+    if count == config.FAIL_THRESHOLD:           # exactly once per failure streak
+        item = db.get_item(conn, item["id"])
+        notifier.send(build_message("needs_attention", item, None, None, None))
+        db.record_alert(conn, item["id"], "needs_attention")
+        return ["needs_attention"]
+    return []
+
+
+def run_checks(dry_run: bool = False, item_ids: Optional[List[int]] = None, db_path: Optional[str] = None,
+               notifier: Optional[Notifier] = None) -> dict:
+    """Check all active items. In dry-run mode, work on a throwaway copy of the DB and print instead of texting."""
+    path = db_path or db.DB_PATH
+    tmp = None
+    if dry_run:
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        try:
+            shutil.copyfile(path, tmp.name)
+        except FileNotFoundError:
+            pass
+        path = tmp.name
+    conn = db.connect(path)
+    notifier = notifier or get_notifier(dry_run=dry_run)
+    fetcher = Fetcher()
+    summary = {"checked": 0, "failed": 0, "alerts": []}
+    try:
+        items = db.list_items(conn, active_only=True)
+        if item_ids:
+            items = [i for i in items if i["id"] in item_ids]
+        for item in items:
+            try:
+                sent = check_item(conn, item, fetcher, notifier)
+            except Exception as e:  # never let one item kill the run
+                log.exception("unexpected error on item %s", item["id"])
+                sent = _handle_failure(conn, item, f"internal: {e}", notifier)
+            summary["checked"] += 1
+            if db.get_item(conn, item["id"])["fail_count"]:
+                summary["failed"] += 1
+            summary["alerts"].extend((item["id"], s) for s in sent)
+    finally:
+        fetcher.close()
+        conn.close()
+        if tmp:
+            import os
+            os.unlink(tmp.name)
+    return summary
