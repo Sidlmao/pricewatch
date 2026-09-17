@@ -111,6 +111,10 @@ class PgConnection:
         self._c.close()
 
 
+class SqliteConnection(sqlite3.Connection):
+    dry_run = False   # plain sqlite3.Connection objects don't accept new attributes
+
+
 def connect(path: Optional[str] = None, dry_run: bool = False):
     """Open the database. dry_run=True never commits; call close() and everything is discarded."""
     if DATABASE_URL and path is None:
@@ -119,7 +123,7 @@ def connect(path: Optional[str] = None, dry_run: bool = False):
     else:
         path = path or DB_PATH
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        conn = sqlite3.connect(path)
+        conn = sqlite3.connect(path, factory=SqliteConnection)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         conn.executescript(SCHEMA_SQLITE)
