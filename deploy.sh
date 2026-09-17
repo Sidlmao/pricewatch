@@ -68,7 +68,7 @@ if [ "$NOTIFIER" = "ntfy" ]; then
   fi
   "$GH" secret set NTFY_TOPIC -b "$NTFY_TOPIC" -R "$FULL"
 fi
-for k in TWILIO_SID TWILIO_TOKEN TWILIO_FROM MY_PHONE TELEGRAM_TOKEN TELEGRAM_CHAT_ID; do
+for k in TWILIO_SID TWILIO_TOKEN TWILIO_FROM MY_PHONE TELEGRAM_TOKEN TELEGRAM_CHAT_ID DATABASE_URL; do
   v="${!k:-}"; [ -n "$v" ] && "$GH" secret set "$k" -b "$v" -R "$FULL"
 done
 "$GH" variable set NOTIFIER -b "$NOTIFIER" -R "$FULL"
@@ -88,6 +88,11 @@ Deployed.
   Runs & logs:         https://github.com/$FULL/actions
 
 MSG
+if [ -n "${DATABASE_URL:-}" ]; then
+  echo "Storage: Supabase/Postgres (DATABASE_URL). The SQLite file in the repo is no longer used."
+else
+  echo "Storage: SQLite file committed to the repo. Set DATABASE_URL in .env to use Supabase instead."
+fi
 if [ "$NOTIFIER" = "telegram" ]; then
   echo "Notifications: Telegram bot (chat id $TELEGRAM_CHAT_ID)."
 fi

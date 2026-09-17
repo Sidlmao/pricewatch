@@ -21,6 +21,8 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}   # set -> Supabase/Postgres; empty -> SQLite file in the repo
     steps:
       - uses: actions/checkout@v4
 
@@ -51,7 +53,8 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python check.py
 
-      - name: Commit price history
+      - name: Commit price history (SQLite mode only)
+        if: env.DATABASE_URL == ''
         run: |
           git config user.name "pricewatch bot"
           git config user.email "pricewatch@users.noreply.github.com"

@@ -1,7 +1,5 @@
 """Check every active item once, record history, and send alerts (deduplicated via the alerts table)."""
 import logging
-import shutil
-import tempfile
 from typing import List, Optional
 
 from . import config, db
@@ -113,18 +111,9 @@ def _handle_failure(conn, item, error: str, notifier: Notifier) -> List[str]:
 
 def run_checks(dry_run: bool = False, item_ids: Optional[List[int]] = None, db_path: Optional[str] = None,
                notifier: Optional[Notifier] = None) -> dict:
-    """Check all active items. In dry-run mode, work on a throwaway copy of the DB and print instead of texting."""
-    path = db_path or db.DB_PATH
-    tmp = None
-    if dry_run:
-        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        tmp.close()
-        try:
-            shutil.copyfile(path, tmp.name)
-        except FileNotFoundError:
-            pass
-        path = tmp.name
-    conn = db.connect(path)
+    """Check all active items. In dry-run mode nothing is committed and alerts are printed instead of sent."""
+    # Dry run = one big transaction that is rolled back at the end (works for SQLite and Postgres).
+    conn = db.connect(db_path, dry_run=dry_run)
     notifier = notifier or get_notifier(dry_run=dry_run)
     fetcher = Fetcher()
     summary = {"checked": 0, "failed": 0, "alerts": []}
@@ -144,8 +133,7 @@ def run_checks(dry_run: bool = False, item_ids: Optional[List[int]] = None, db_p
             summary["alerts"].extend((item["id"], s) for s in sent)
     finally:
         fetcher.close()
+        if dry_run:
+            conn.rollback()
         conn.close()
-        if tmp:
-            import os
-            os.unlink(tmp.name)
     return summary

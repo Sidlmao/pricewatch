@@ -46,8 +46,8 @@ python check.py --test-sms           # sends one test message through the config
 python app.py                        # web UI at http://127.0.0.1:5055
 ```
 
-`--dry-run` works on a throwaway copy of the database, so it never records prices or
-alerts. That matters: a real drop will still be texted on the next real run.
+`--dry-run` runs everything inside a transaction that is rolled back, so it never records
+prices or alerts. That matters: a real drop will still be texted on the next real run.
 
 ## Twilio setup (SMS)
 
@@ -130,20 +130,33 @@ Playwright's Chromium (Zara and SSENSE would break), and their free cron runs on
 GitHub Actions gives you a real Linux box with a browser for a minute every 6 hours, for
 free, and the repo itself is the storage.
 
-### Committed SQLite vs a hosted database
+### Storage: Supabase (Postgres) or a committed SQLite file
 
-**Committed SQLite (what this uses).** Free, zero accounts, one file you can copy or open
-with any SQLite tool. The downsides: every run that records a price makes a commit (about
-4 a day, each a few KB, so the repo grows slowly forever), and if you also run the local
-web UI, its copy is only as fresh as your last `git pull`. Fine for one person and a few
-dozen items.
+Both work; pick with one variable.
 
-**Hosted DB (Turso, Supabase, Neon all have free tiers).** One live source of truth for
-both the workflow and your laptop, no commits, and the web UI could run anywhere. The
-cost is another account, credentials in two places, a driver dependency, and the free
-tiers can pause or change terms. Worth it only if you want the UI online or several
-people sharing one tracker. Switching later means replacing `pricewatch/db.py`; nothing
-else touches SQL.
+**Supabase (recommended once you're past trying it out).** One live database that the
+GitHub cron, the dashboard and your laptop all share. No commits, no `git pull` before
+adding items, and the local web page always shows the latest prices.
+
+1. Create a free project at https://supabase.com (any region; remember the database password).
+2. In the project dashboard press **Connect** (top bar), pick **Session pooler**, and copy the URI.
+   It looks like `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`.
+   Use the pooler, not "Direct connection": GitHub's runners are IPv4-only and the direct host is IPv6.
+3. Put it in `.env` as `DATABASE_URL=...` (replace `[YOUR-PASSWORD]` with the real one).
+4. `python migrate.py` copies anything already in the SQLite file across (safe to re-run).
+5. `./deploy.sh` pushes the URL to the repo's secrets. From the next run, the workflows
+   read and write Supabase and stop committing the database file.
+
+Tables are created automatically on first connect. The free tier pauses projects after a
+week with no activity, but the 6-hourly check counts as activity, so that won't happen
+while the tracker is running.
+
+**Committed SQLite (the default).** Free, zero accounts, one file you can copy or open
+with any SQLite tool. Every run that records a price makes a commit (about 4 a day, a few
+KB each), and if you also run the local web UI, its copy is only as fresh as your last
+`git pull`. Fine for one person and a few dozen items.
+
+Switching back: remove `DATABASE_URL` from `.env` and the repo secret.
 
 ## How alerts work
 
@@ -192,10 +205,11 @@ build_site.py            renders the same page statically for GitHub Pages
 pricewatch/
   fetch.py               user agents, delays, robots.txt, requests + Playwright
   prices.py              price string / currency parsing
-  db.py                  SQLite schema and helpers (items, price_history, alerts)
+  db.py                  storage: SQLite file or Postgres/Supabase (DATABASE_URL), same API
   checker.py             the check + alert rules
   extractors/            one file per store + generic fallback
   notify/                Notifier interface: twilio, telegram, ntfy, console
-data/pricewatch.db       the database (committed)
+migrate.py               copy the SQLite data into Supabase
+data/pricewatch.db       the SQLite database (committed, unused when DATABASE_URL is set)
 .github/workflows/       check.yml = the 6-hourly cron + dashboard, manage.yml = add/remove form
 ```

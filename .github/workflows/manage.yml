@@ -38,6 +38,8 @@ permissions:
 jobs:
   manage:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -73,7 +75,8 @@ jobs:
           esac
           python check.py --list
 
-      - name: Commit
+      - name: Commit (SQLite mode only)
+        if: env.DATABASE_URL == ''
         run: |
           git config user.name "pricewatch bot"
           git config user.email "pricewatch@users.noreply.github.com"
