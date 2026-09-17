@@ -50,6 +50,8 @@ def main(argv=None):
     p = argparse.ArgumentParser(description="Personal clothing price tracker")
     p.add_argument("--dry-run", action="store_true", help="print alerts instead of sending; DB untouched")
     p.add_argument("--item", type=int, action="append", help="only check this item id (repeatable)")
+    p.add_argument("--due", action="store_true", help="only items not checked in the last CHECK_INTERVAL_HOURS (what the cron uses)")
+    p.add_argument("--due-count", action="store_true", help="print how many items are due and exit")
     p.add_argument("--add", metavar="URL"); p.add_argument("--size"); p.add_argument("--target", type=float)
     p.add_argument("--restock", action="store_true", help="also alert when the size comes back in stock")
     p.add_argument("--list", action="store_true"); p.add_argument("--remove", type=int, metavar="ID")
@@ -90,10 +92,15 @@ def main(argv=None):
         from pricewatch.notify import get_notifier
         get_notifier().send("pricewatch test: notifications are working ✅"); print("sent"); return 0
 
-    s = run_checks(dry_run=a.dry_run, item_ids=a.item)
+    if a.due_count:
+        from pricewatch import config
+        conn = db.connect(); print(len(db.due_items(conn, config.CHECK_INTERVAL_HOURS))); conn.close(); return 0
+
+    s = run_checks(dry_run=a.dry_run, item_ids=a.item, due_only=a.due)
     mode = "DRY RUN" if a.dry_run else "run"
     print(f"\n{mode}: checked {s['checked']} item(s), {s['failed']} failing, {len(s['alerts'])} alert(s)"
-          + (": " + ", ".join(f"#{i} {t}" for i, t in s["alerts"]) if s["alerts"] else ""))
+          + (": " + ", ".join(f"#{i} {t}" for i, t in s["alerts"]) if s["alerts"] else "")
+          + (f", linked {s['linked']} Telegram user(s)" if s.get("linked") else ""))
     return 0
 
 

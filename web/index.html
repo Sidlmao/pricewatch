@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>pricewatch</title>
+<meta name="color-scheme" content="light dark">
+<style>
+  :root {
+    --bg:#fafafa; --card:#fff; --fg:#161616; --muted:#6b6b6b; --line:#e6e6e6; --line-strong:#cfcfcf;
+    --accent:#2f5fd0; --accent-ink:#fff; --ok:#1a7f37; --bad:#b42318; --warn:#9a6700;
+    --tip-bg:#161616; --tip-fg:#fff; --shadow:0 1px 2px rgba(0,0,0,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111214; --card:#1a1b1e; --fg:#ececec; --muted:#9a9a9a; --line:#2a2b2f; --line-strong:#3a3b40;
+            --accent:#7b9cf0; --accent-ink:#0d1330; --ok:#4cc38a; --bad:#f08080; --warn:#e2b340;
+            --tip-bg:#ececec; --tip-fg:#111; --shadow:none; }
+  }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  html { background:var(--bg); }
+  body { margin:0; padding:0 16px calc(48px + env(safe-area-inset-bottom,0px)); color:var(--fg); background:var(--bg);
+         font:15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif; }
+  main { max-width:880px; margin:0 auto; }
+  a { color:inherit; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:22px 0 18px; }
+  .brand { font-weight:650; font-size:18px; letter-spacing:-.01em; text-decoration:none; }
+  .brand span { color:var(--accent); }
+  .who { color:var(--muted); font-size:13px; display:flex; gap:10px; align-items:center; }
+  button { font:inherit; font-size:14px; padding:8px 12px; border:1px solid var(--line-strong); border-radius:8px;
+           background:var(--card); color:var(--fg); cursor:pointer; }
+  button:hover { border-color:var(--fg); }
+  button.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:550; }
+  button.primary:hover { filter:brightness(1.08); }
+  button.link { border:none; background:none; color:var(--muted); padding:4px 6px; }
+  button.link:hover { color:var(--fg); }
+  button:disabled { opacity:.5; cursor:default; }
+  input[type=text], input[type=url], input[type=email], input[type=number] {
+    font:inherit; padding:9px 11px; border:1px solid var(--line-strong); border-radius:8px; background:var(--card); color:var(--fg); width:100%; }
+  input:focus { outline:2px solid var(--accent); outline-offset:1px; border-color:transparent; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; box-shadow:var(--shadow); }
+  .card h1 { font-size:22px; margin:0 0 6px; letter-spacing:-.01em; }
+  .card p { margin:0 0 16px; color:var(--muted); }
+  .signin { max-width:420px; margin:48px auto 0; }
+  .signin .g { width:100%; display:flex; gap:10px; justify-content:center; align-items:center; padding:11px; font-size:15px; }
+  .or { display:flex; align-items:center; gap:12px; color:var(--muted); font-size:12px; margin:16px 0; }
+  .or::before, .or::after { content:""; flex:1; height:1px; background:var(--line); }
+  .row { display:flex; gap:8px; }
+  .row button { white-space:nowrap; }
+  .notice { border:1px solid var(--line); background:var(--card); border-radius:10px; padding:10px 14px; font-size:14px; margin:0 0 16px; display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; }
+  .notice.warn { border-color:color-mix(in srgb, var(--warn) 45%, var(--line)); }
+  form.add { display:grid; grid-template-columns:1fr 92px 130px auto auto; gap:8px; align-items:center; margin:0 0 22px; }
+  form.add label.chk { font-size:13px; color:var(--muted); white-space:nowrap; display:flex; align-items:center; gap:6px; }
+  .list { border-top:1px solid var(--line); }
+  .item { display:grid; grid-template-columns:60px 1fr 200px auto; gap:16px; align-items:center; padding:14px 0; border-bottom:1px solid var(--line); }
+  .item.paused { opacity:.55; }
+  .thumb { width:60px; height:60px; object-fit:cover; border-radius:8px; background:var(--line); display:block; }
+  .name { font-weight:550; text-decoration:none; }
+  .name:hover { text-decoration:underline; }
+  .meta { color:var(--muted); font-size:13px; margin-top:2px; overflow-wrap:anywhere; }
+  .price { font-size:18px; font-weight:600; letter-spacing:-.01em; }
+  .price .was { color:var(--muted); text-decoration:line-through; font-weight:400; font-size:13px; margin-left:6px; }
+  .price.pending { color:var(--muted); font-weight:400; font-size:14px; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+  .actions { display:flex; gap:2px; }
+  .chart { position:relative; width:200px; height:44px; margin-top:4px; }
+  .chart svg { display:block; overflow:visible; }
+  .chart .tip { position:absolute; pointer-events:none; background:var(--tip-bg); color:var(--tip-fg); font-size:11px; padding:3px 6px; border-radius:5px; white-space:nowrap; transform:translate(-50%,-130%); display:none; }
+  .empty { color:var(--muted); text-align:center; padding:48px 0; }
+  .foot { color:var(--muted); font-size:13px; margin-top:22px; }
+  .toast { position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); background:var(--tip-bg); color:var(--tip-fg); padding:9px 14px; border-radius:8px; font-size:14px; display:none; max-width:90vw; }
+  @media (max-width:680px) {
+    form.add { grid-template-columns:1fr 1fr; }
+    form.add input[name=url] { grid-column:1 / -1; }
+    form.add button { grid-column:2; }
+    .item { grid-template-columns:52px 1fr; }
+    .item .side, .item .actions { grid-column:2; }
+    .chart { width:100%; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <a class="brand" href="./">price<span>watch</span></a>
+    <div class="who" id="who" hidden><span id="email"></span><button class="link" id="signout">sign out</button></div>
+  </header>
+
+  <section id="signin" class="signin card" hidden>
+    <h1>Track prices on clothes you want.</h1>
+    <p>Paste a product link. Get a message when it drops or your size is back.</p>
+    <button class="primary g" id="google">
+      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.4 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.7 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.7-2.1 15.6-5.7l-7.7-6c-2.1 1.4-4.8 2.3-7.9 2.3-6.3 0-11.6-3.9-13.5-9.3l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
+      Continue with Google
+    </button>
+    <div class="or">or</div>
+    <form id="magic" class="row">
+      <input type="email" name="email" placeholder="you@example.com" required autocomplete="email">
+      <button type="submit">Email me a link</button>
+    </form>
+  </section>
+
+  <section id="app" hidden>
+    <div id="tg" class="notice warn" hidden>
+      <span>Alerts go to Telegram. Connect it once so you actually get them.</span>
+      <a id="tglink" href="#" target="_blank" rel="noopener"><button class="primary" type="button">Connect Telegram</button></a>
+    </div>
+    <form class="add" id="add">
+      <input type="url" name="url" placeholder="Paste a product link (Nike, Zara, Uniqlo, SSENSE, END., Grailed, Amazon, ...)" required>
+      <input type="text" name="size" placeholder="Size">
+      <input type="number" name="target" placeholder="Target price" step="0.01" min="0">
+      <label class="chk"><input type="checkbox" name="restock"> restock alert</label>
+      <button class="primary" type="submit">Track</button>
+    </form>
+    <div class="list" id="list"></div>
+    <p class="foot" id="foot"></p>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script src="./config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
+<script>
+(function () {
+  const C = window.PW_CONFIG || {};
+  const $ = (s) => document.querySelector(s);
+  const el = { signin: $("#signin"), app: $("#app"), who: $("#who"), email: $("#email"), list: $("#list"),
+               tg: $("#tg"), tglink: $("#tglink"), foot: $("#foot"), toast: $("#toast") };
+  if (!C.supabaseUrl || !C.supabaseAnonKey) {
+    el.signin.hidden = false; $("#google").disabled = true;
+    el.signin.querySelector("p").textContent = "Not configured yet: set SUPABASE_URL and SUPABASE_ANON_KEY (see README).";
+    return;
+  }
+  const sb = window.supabase.createClient(C.supabaseUrl, C.supabaseAnonKey);
+  const here = location.origin + location.pathname;
+  let user = null, profile = null;
+
+  const toast = (m) => { el.toast.textContent = m; el.toast.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => el.toast.style.display = "none", 3200); };
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const SYM = { USD:"$", EUR:"€", GBP:"£", JPY:"¥", CAD:"CA$", AUD:"A$" };
+  const fmt = (v, cur) => v == null ? "" : (SYM[cur] ?? "") + (cur === "JPY" || cur === "KRW" ? Math.round(v).toLocaleString() : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) + (SYM[cur] ? "" : (cur ? " " + cur : ""));
+  const ago = (iso) => { if (!iso) return "never"; const s = (Date.now() - new Date(iso)) / 1000; if (s < 60) return "just now"; if (s < 3600) return Math.floor(s/60) + "m ago"; if (s < 86400) return Math.floor(s/3600) + "h ago"; return Math.floor(s/86400) + "d ago"; };
+
+  // ---- auth ----
+  $("#google").onclick = () => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: here } });
+  $("#magic").onsubmit = async (e) => { e.preventDefault(); const email = e.target.email.value.trim();
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: here } });
+    toast(error ? error.message : "Check your email for the sign-in link."); };
+  $("#signout").onclick = () => sb.auth.signOut();
+  sb.auth.onAuthStateChange((_ev, session) => { user = session?.user || null; render(); });
+
+  // ---- data ----
+  async function loadProfile() {
+    const { data } = await sb.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
+    profile = data;
+    if (!profile) { const { data: p } = await sb.from("profiles").insert({ user_id: user.id, email: user.email }).select().maybeSingle(); profile = p; }
+  }
+  async function loadItems() {
+    const { data, error } = await sb.from("items")
+      .select("*, price_history(price, original_price, in_stock, checked_at), alerts(type, sent_at)")
+      .order("created_at", { ascending: false })
+      .order("checked_at", { referencedTable: "price_history", ascending: true })
+      .order("sent_at", { referencedTable: "alerts", ascending: false });
+    if (error) { toast(error.message); return []; }
+    return data || [];
+  }
+
+  async function render() {
+    el.signin.hidden = !!user; el.app.hidden = !user; el.who.hidden = !user;
+    if (!user) return;
+    el.email.textContent = user.email || "";
+    await loadProfile();
+    const linked = !!(profile && profile.telegram_chat_id);
+    el.tg.hidden = linked || !C.telegramBot;
+    el.tglink.href = `https://t.me/${C.telegramBot}?start=${user.id}`;
+    const items = await loadItems();
+    el.list.innerHTML = items.length ? items.map(row).join("") : `<div class="empty">Nothing tracked yet. Paste a product link above.</div>`;
+    items.forEach((it) => { const c = document.getElementById("chart-" + it.id); if (c) spark(c, it); });
+    el.foot.textContent = `Prices are checked about every ${C.checkIntervalHours || 6} hours; new items within the hour. ` +
+      (linked ? "Alerts go to your Telegram." : "Connect Telegram above to receive alerts.");
+  }
+
+  function row(it) {
+    const hist = (it.price_history || []).filter((h) => h.price != null);
+    const last = hist[hist.length - 1];
+    const lastAny = (it.price_history || []).slice(-1)[0];
+    const low = hist.length ? Math.min(...hist.map((h) => h.price)) : null;
+    const cur = it.currency;
+    const stock = lastAny ? lastAny.in_stock : null;
+    const alerts = (it.alerts || []).slice(0, 2).map((a) => a.type.replace("_", " ") + " " + ago(a.sent_at));
+    const meta1 = [it.store, it.size && "size " + it.size, it.target_price != null && "target " + fmt(it.target_price, cur), it.notify_restock && "restock alerts",
+                   "checked " + ago(lastAny && lastAny.checked_at)].filter(Boolean).join(" · ");
+    const meta2 = [stock === 1 ? '<span class="ok">in stock</span>' : stock === 0 ? '<span class="bad">sold out</span>' : "",
+                   low != null && "low " + fmt(low, cur), ...alerts,
+                   it.fail_count ? `<span class="warn">failing (${it.fail_count}): ${esc(it.last_error || "")}</span>` : ""].filter(Boolean).join(" · ");
+    const price = last ? `<div class="price">${fmt(last.price, cur)}${last.original_price ? `<span class="was">${fmt(last.original_price, cur)}</span>` : ""}</div>`
+                       : `<div class="price pending">${it.fail_count ? "couldn't read price" : "waiting for first check"}</div>`;
+    return `<div class="item${it.active ? "" : " paused"}" data-id="${it.id}">
+      ${it.image_url ? `<img class="thumb" src="${esc(it.image_url)}" alt="" loading="lazy">` : `<div class="thumb"></div>`}
+      <div>
+        <a class="name" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.name || it.url)}</a>
+        <div class="meta">${esc(meta1)}</div>
+        <div class="meta">${meta2}</div>
+      </div>
+      <div class="side">${price}<div class="chart" id="chart-${it.id}"></div></div>
+      <div class="actions">
+        <button class="link" data-act="toggle">${it.active ? "pause" : "resume"}</button>
+        <button class="link" data-act="remove">remove</button>
+      </div>
+    </div>`;
+  }
+
+  // single-series sparkline: one hue, 2px line, hover tooltip, dashed target line
+  function spark(box, it) {
+    const pts = (it.price_history || []).filter((h) => h.price != null);
+    if (pts.length < 2) return;
+    const W = box.clientWidth || 200, H = 44, pad = 4;
+    const vals = pts.map((p) => p.price), t = it.target_price;
+    const lo = Math.min(...vals, t ?? Infinity), hi = Math.max(...vals, t ?? -Infinity), span = (hi - lo) || 1;
+    const x = (i) => pad + (W - 2 * pad) * i / (pts.length - 1), y = (v) => pad + (H - 2 * pad) * (1 - (v - lo) / span);
+    const d = pts.map((p, i) => `${x(i).toFixed(1)},${y(p.price).toFixed(1)}`).join(" ");
+    box.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="price history">
+      ${t != null ? `<line x1="0" x2="${W}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}" stroke="var(--line-strong)" stroke-dasharray="3 3"/>` : ""}
+      <polyline points="${d}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle class="hov" r="4" fill="var(--accent)" stroke="var(--card)" stroke-width="2" cx="${x(pts.length-1).toFixed(1)}" cy="${y(vals[vals.length-1]).toFixed(1)}"/>
+    </svg><div class="tip"></div>`;
+    const svg = box.querySelector("svg"), dot = box.querySelector(".hov"), tip = box.querySelector(".tip");
+    const show = (i) => { dot.setAttribute("cx", x(i).toFixed(1)); dot.setAttribute("cy", y(pts[i].price).toFixed(1));
+      tip.textContent = `${fmt(pts[i].price, it.currency)} · ${new Date(pts[i].checked_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+      tip.style.left = x(i) + "px"; tip.style.top = y(pts[i].price) + "px"; tip.style.display = "block"; };
+    svg.addEventListener("mousemove", (e) => { const r = svg.getBoundingClientRect(); show(Math.max(0, Math.min(pts.length - 1, Math.round((e.clientX - r.left - pad) / (W - 2 * pad) * (pts.length - 1))))); });
+    svg.addEventListener("mouseleave", () => { tip.style.display = "none"; show.last = null; dot.setAttribute("cx", x(pts.length-1).toFixed(1)); dot.setAttribute("cy", y(vals[vals.length-1]).toFixed(1)); });
+  }
+
+  // ---- actions ----
+  $("#add").onsubmit = async (e) => {
+    e.preventDefault(); const f = e.target;
+    const url = f.url.value.trim(); if (!/^https?:\/\//.test(url)) return toast("Paste a full link starting with http(s)://");
+    const rec = { user_id: user.id, url, size: f.size.value.trim() || null, target_price: f.target.value ? Number(f.target.value) : null,
+                  notify_restock: f.restock.checked ? 1 : 0, active: 1, created_at: new Date().toISOString() };
+    const btn = f.querySelector("button"); btn.disabled = true;
+    const { error } = await sb.from("items").insert(rec); btn.disabled = false;
+    if (error) return toast(error.message);
+    f.reset(); toast("Tracking. First price check runs within the hour."); render();
+  };
+  el.list.addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-act]"); if (!b) return;
+    const id = Number(b.closest(".item").dataset.id);
+    if (b.dataset.act === "remove") { if (!confirm("Remove this item and its history?")) return;
+      const { error } = await sb.from("items").delete().eq("id", id); if (error) return toast(error.message); }
+    if (b.dataset.act === "toggle") { const active = b.textContent === "resume" ? 1 : 0;
+      const { error } = await sb.from("items").update({ active }).eq("id", id); if (error) return toast(error.message); }
+    render();
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,11 +1,19 @@
 # pricewatch
 
-A personal price tracker for clothing. Paste a product URL, optionally a size and a target
-price, and get a text when the price drops (or when your size comes back in stock).
+Track prices on clothes you want. Sign in, paste a product link, and get a Telegram
+message when the price drops (or when your size is back in stock).
 
-Runs for free on a GitHub Actions cron every 6 hours. Price history lives in a SQLite file
-that the workflow commits back to the repo. A tiny local web page lets you add and remove
-items and see a price chart.
+- **Web app**: sign in with Google or an email link, add items by link, see price history.
+  Hosted free on GitHub Pages.
+- **Database + login**: Supabase (free tier). Row-level security means each user only
+  ever sees their own items.
+- **Scraping**: a GitHub Actions cron runs hourly and checks whatever is due (every item
+  about every 6 hours, new items within the hour). Playwright handles the JS-heavy sites.
+- **Alerts**: each user connects the Telegram bot once; alerts go to their own chat.
+
+A single-user "personal mode" without Supabase or sign-in still exists: leave
+`DATABASE_URL` unset and it keeps everything in a SQLite file and texts one phone/chat.
+The rest of this README is about the full app.
 
 ## Supported stores
 
@@ -20,196 +28,113 @@ items and see a price chart.
 | SSENSE  | Headless Chromium, then JSON-LD + size dropdown    | per size      |
 | anything else | JSON-LD offers, then og:/product: meta tags, then embedded JSON, then Chromium | overall only |
 
-Sale prices are handled: the tracker records what you'd pay now, and remembers the
-struck-through original price separately for display. Currency symbols and ISO codes are
-parsed (`$54.99`, `1.299,00 €`, `£45`, `¥12,000`, `US$ 120` ...).
+Sale prices are handled: the tracker records what you'd pay now and remembers the
+struck-through original separately. Currency symbols and ISO codes are parsed.
 
-## Setup (local)
+## Setup
 
-```bash
-cd pricewatch
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-playwright install chromium          # only needed for Zara/SSENSE/unknown stores
-cp .env.example .env                 # then fill in the values (see Twilio below)
-```
+### 1. Supabase (database + sign-in)
 
-Quick checks that everything works:
+1. Create a project at https://supabase.com. Note the database password.
+2. **Project Settings > API**: copy the **Project URL** and the **anon public** key.
+3. **Connect** (top bar) > **Session pooler**: copy the URI and put your password in it.
+   Use the pooler, not "Direct connection": GitHub's runners are IPv4-only.
+4. **Authentication > Providers**: enable **Google** (paste a Google OAuth client id and
+   secret from Google Cloud Console; the callback URL to register there is shown on that
+   page). Email sign-in links work out of the box with no extra setup.
+5. **Authentication > URL Configuration**: after step 3 below you'll know your app URL
+   (`https://<you>.github.io/pricewatch/`). Set it as **Site URL** and add it to
+   **Redirect URLs**, otherwise sign-in bounces back to localhost.
 
-```bash
-python scrape.py "https://www.nike.com/t/..."  --size M     # scrape one URL, print what it found
-python check.py --add "https://www.nike.com/t/..." --size M --target 60 --restock
-python check.py --list
-python check.py --dry-run            # check every item, print alerts, change nothing
-python check.py                      # the real thing: records history and texts you
-python check.py --test-sms           # sends one test message through the configured notifier
-python app.py                        # web UI at http://127.0.0.1:5055
-```
+### 2. Telegram bot (alerts)
 
-`--dry-run` runs everything inside a transaction that is rolled back, so it never records
-prices or alerts. That matters: a real drop will still be texted on the next real run.
+Message **@BotFather**, send `/newbot`, copy the token. Users connect themselves from
+inside the app (one tap), so you never need their chat ids.
 
-## Twilio setup (SMS)
-
-1. Create an account at https://www.twilio.com/try-twilio. The free trial is enough for
-   a personal tracker.
-2. In the Console, **Get a trial phone number**. That number is `TWILIO_FROM`
-   (E.164 format, e.g. `+15551234567`).
-3. **Verified Caller IDs** (Phone Numbers > Manage > Verified Caller IDs): add and verify
-   your own mobile number. Trial accounts can only text verified numbers. That number is
-   `MY_PHONE`.
-4. From the Console home page copy **Account SID** (`TWILIO_SID`) and **Auth Token**
-   (`TWILIO_TOKEN`).
-5. Put all four in `.env`, then run `python check.py --test-sms`.
-
-Trial messages carry a "Sent from your Twilio trial account" prefix. If you upgrade to a
-paid account and text a US number, Twilio may require A2P 10DLC registration for a local
-number; a toll-free number with toll-free verification is the simplest route.
-
-### Telegram instead of SMS (free, recommended)
-
-1. In Telegram, message **@BotFather**, send `/newbot`, pick a name, and copy the token it gives you.
-2. Run `python check.py --telegram-setup`, paste the token, then send your new bot any
-   message. It finds your chat id, writes both to `.env`, and sends you a test message.
-3. Run `./deploy.sh` (again, if you already deployed) to push the values to GitHub.
-
-### Other notifiers
-
-The notifier is one small class (`pricewatch/notify/base.py`). Included:
-
-- `NOTIFIER=twilio` (default)
-- `NOTIFIER=telegram` with `TELEGRAM_TOKEN` and `TELEGRAM_CHAT_ID` (see above)
-- `NOTIFIER=ntfy` with `NTFY_TOPIC=<a long random string>` sends free push notifications
-  via https://ntfy.sh. Install the ntfy app and subscribe to the same topic. No account
-  needed.
-- `NOTIFIER=console` just prints.
-
-To add Discord, Slack or anything else, subclass `Notifier`, implement `send(text)`, and add a
-branch in `get_notifier()`.
-
-## Deploy (one command)
+### 3. Deploy
 
 ```bash
 cd pricewatch
+python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+cp .env.example .env     # fill in DATABASE_URL, SUPABASE_URL, SUPABASE_ANON_KEY, TELEGRAM_TOKEN
 ./deploy.sh
 ```
 
-The first time, it installs the GitHub CLI if needed, opens a browser tab for you to log in
-to GitHub, creates a private repo called `pricewatch`, pushes the code, copies whatever is in
-your `.env` into the repo's secrets, and starts the first check. It prints three links when
-it's done:
+The script logs you into GitHub (browser tab), creates a private repo, pushes, copies the
+values from `.env` into the repo's secrets and variables, applies the row-level security
+policies to Supabase, and starts the first runs. It prints the app link. Re-run it any
+time you change `.env` or the code.
 
-- **Dashboard**: `https://<you>.github.io/pricewatch/`, a read-only copy of the web page,
-  rebuilt after every check.
-- **Add / remove items**: the "manage items" workflow. Press *Run workflow*, paste a URL,
-  optional size and target, and it's tracked. Works from your phone. Remove or pause an
-  item by its `#` number from the dashboard.
-- **Runs & logs**: the Actions tab.
+## How it works
 
-If `.env` has no Twilio values yet, it sets up free push notifications through
-[ntfy.sh](https://ntfy.sh) instead: install the ntfy app and subscribe to the topic it
-prints. Add Twilio values to `.env` later, set `NOTIFIER=twilio`, and run `./deploy.sh`
-again to switch to SMS. Re-running the script is always safe; it just pushes and re-syncs.
+```
+web/index.html  ── supabase-js ──>  Supabase (auth + Postgres, RLS)  <── psycopg ──  check.py (GitHub Actions, hourly)
+      │                                                                                     │
+  GitHub Pages                                                                    Telegram bot -> each user's chat
+```
 
-Checks run every 6 hours. To change that, edit the single `cron:` line in
-`.github/workflows/check.yml` (GitHub's minimum is every 5 minutes; scheduled runs can lag
-by 10 to 15 minutes at busy times).
+- The browser talks to Supabase directly with the public anon key. Policies in
+  `setup_supabase.py` restrict every table to `user_id = auth.uid()`.
+- The cron connects as the database owner (bypasses RLS), scrapes items that are due,
+  appends to `price_history`, and decides alerts.
+- "Connect Telegram" opens `t.me/<bot>?start=<user_id>`. The next cron run reads the
+  bot's messages, links that chat to the user, and confirms with a message.
 
-### Doing it by hand instead
+### Alert rules
 
-Push this folder to a GitHub repo, add the secrets `TWILIO_SID`, `TWILIO_TOKEN`,
-`TWILIO_FROM`, `MY_PHONE` (or `NTFY_TOPIC` plus a repository *variable* `NOTIFIER=ntfy`)
-under Settings > Secrets and variables > Actions, set Settings > Actions > General >
-Workflow permissions to *Read and write*, set Settings > Pages > Source to *GitHub Actions*,
-and run "price check" once from the Actions tab.
+- **Target set**: message when the price is at or below the target. Not again unless it
+  falls further, or goes back above target and then drops again.
+- **No target**: message on any drop compared with the previous check.
+- **Restock** (per item): message when the size was sold out last check and is available now.
+- **Needs attention**: 3 failed checks in a row = one message, then silence until it works again.
 
-### Why not Vercel / a normal host?
+Every alert is written to the `alerts` table, which is how it never sends the same one twice.
 
-Vercel-style platforms have no persistent disk (the SQLite file would vanish), can't run
-Playwright's Chromium (Zara and SSENSE would break), and their free cron runs once a day.
-GitHub Actions gives you a real Linux box with a browser for a minute every 6 hours, for
-free, and the repo itself is the storage.
+### Being polite to the stores
 
-### Storage: Supabase (Postgres) or a committed SQLite file
+Rotating desktop user agents, a random 2 to 6 second gap between requests, `robots.txt`
+respected, plain HTTP first and Chromium only when a site needs it (images and fonts
+blocked). One check per item every 6 hours is far below anything a store notices.
 
-Both work; pick with one variable.
+## Local commands
 
-**Supabase (recommended once you're past trying it out).** One live database that the
-GitHub cron, the dashboard and your laptop all share. No commits, no `git pull` before
-adding items, and the local web page always shows the latest prices.
+```bash
+python scrape.py "https://..." --size M        # scrape one URL, print what it found
+python check.py --dry-run                      # check everything, print alerts, commit nothing
+python check.py --due                          # what the cron runs
+python check.py --due-count
+python setup_supabase.py                       # (re)apply RLS policies
+python migrate.py                              # copy a personal-mode SQLite file into Supabase
+python app.py                                  # personal-mode local UI (SQLite only)
+```
 
-1. Create a free project at https://supabase.com (any region; remember the database password).
-2. In the project dashboard press **Connect** (top bar), pick **Session pooler**, and copy the URI.
-   It looks like `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`.
-   Use the pooler, not "Direct connection": GitHub's runners are IPv4-only and the direct host is IPv6.
-3. Put it in `.env` as `DATABASE_URL=...` (replace `[YOUR-PASSWORD]` with the real one).
-4. `python migrate.py` copies anything already in the SQLite file across (safe to re-run).
-5. `./deploy.sh` pushes the URL to the repo's secrets. From the next run, the workflows
-   read and write Supabase and stop committing the database file.
-
-Tables are created automatically on first connect. The free tier pauses projects after a
-week with no activity, but the 6-hourly check counts as activity, so that won't happen
-while the tracker is running.
-
-**Committed SQLite (the default).** Free, zero accounts, one file you can copy or open
-with any SQLite tool. Every run that records a price makes a commit (about 4 a day, a few
-KB each), and if you also run the local web UI, its copy is only as fresh as your last
-`git pull`. Fine for one person and a few dozen items.
-
-Switching back: remove `DATABASE_URL` from `.env` and the repo secret.
-
-## How alerts work
-
-Every run checks each active item once and appends a row to `price_history`. Then:
-
-- **Target set**: text when the price is at or below the target. It won't text again
-  unless the price falls further, or goes back above the target and then drops again.
-- **No target**: text on any drop compared with the previous check.
-- **Restock** (per-item checkbox): text when your size was sold out on the previous check
-  and is available now. Without a size it uses the item's overall availability.
-- **Needs attention**: if a check fails 3 times in a row (site changed, blocked, URL
-  dead) you get exactly one text. The count resets when a check succeeds. Change the
-  threshold with `FAIL_THRESHOLD` in `.env`.
-
-Each message has the item name, old price, new price, percent off and the link. Every
-alert is recorded in the `alerts` table, which is how it avoids texting the same drop twice.
-
-## Being polite to the stores
-
-- Rotates through realistic desktop user agents.
-- Waits a random 2 to 6 seconds between requests (`MIN_DELAY` / `MAX_DELAY`).
-- Reads each site's `robots.txt` and skips URLs it disallows (`RESPECT_ROBOTS=0` to turn
-  off, not recommended).
-- Tries cheap plain HTTP first and only launches Chromium when the site needs it, with
-  images, fonts and media blocked.
-
-One check every 6 hours per item is far below anything a store would notice. Don't set the
-cron to every 5 minutes with 200 items.
+To test the web app locally without deploying: `cd web && python3 -m http.server 8765`,
+fill `web/config.js` with your Supabase URL/anon key, and add `http://localhost:8765` to
+Supabase's Redirect URLs.
 
 ## Adding a store
 
 Drop a file in `pricewatch/extractors/` with a subclass of `Extractor`, set `domains`,
-and either override `extract(html, url)` (parse HTML) or set `uses_api = True` and
-override `from_api(url, fetcher)`. Set `needs_browser = True` if plain HTTP is blocked.
-Register it in `EXTRACTORS` in `pricewatch/extractors/__init__.py`. The `nike.py` and
-`grailed.py` files are short examples of each style. Test with `python scrape.py URL`.
+and either override `extract(html, url)` or set `uses_api = True` and override
+`from_api(url, fetcher)`. Set `needs_browser = True` if plain HTTP is blocked. Register it
+in `EXTRACTORS`. `nike.py` and `grailed.py` are short examples of each style.
 
 ## Layout
 
 ```
-deploy.sh                one-command deploy to GitHub
-check.py                 CLI: run checks, --dry-run, --add/--list/--remove/--toggle, --test-sms
+web/                     the app (static HTML/JS, deployed to GitHub Pages by pages.yml)
+check.py                 CLI: --due, --dry-run, --add/--list/--remove/--toggle, --telegram-setup
 scrape.py                debug one URL
-app.py + templates/      web UI (Flask, one page, server-rendered SVG chart)
-build_site.py            renders the same page statically for GitHub Pages
+setup_supabase.py        row-level security policies + grants
+migrate.py               SQLite -> Supabase copy
+deploy.sh                one-command deploy
 pricewatch/
   fetch.py               user agents, delays, robots.txt, requests + Playwright
   prices.py              price string / currency parsing
-  db.py                  storage: SQLite file or Postgres/Supabase (DATABASE_URL), same API
-  checker.py             the check + alert rules
+  db.py                  storage: Postgres (DATABASE_URL) or SQLite, same API
+  checker.py             check + alert rules, per-user routing
   extractors/            one file per store + generic fallback
-  notify/                Notifier interface: twilio, telegram, ntfy, console
-migrate.py               copy the SQLite data into Supabase
-data/pricewatch.db       the SQLite database (committed, unused when DATABASE_URL is set)
-.github/workflows/       check.yml = the 6-hourly cron + dashboard, manage.yml = add/remove form
+  notify/                telegram (per user), twilio, ntfy, console
+app.py + templates/      personal-mode Flask UI
+.github/workflows/       check.yml (hourly cron), pages.yml (deploys web/)
 ```

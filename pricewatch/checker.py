@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from . import config, db
 from .extractors import scrape, ScrapeError, FetchError, RobotsDisallowed, stock_for_size, Fetcher
-from .notify import get_notifier, Notifier
+from .notify import get_notifier, Notifier, ConsoleNotifier
 from .prices import fmt
 
 log = logging.getLogger("pricewatch.checker")
@@ -43,9 +43,31 @@ def build_message(kind: str, item, old_price, new_price, currency) -> str:
     return f"{head}\n{line}\n{item['url']}"
 
 
+class NullNotifier(Notifier):
+    """Owner hasn't connected a channel yet: record the alert, send nothing."""
+    name = "none"
+
+    def send(self, text: str) -> None:
+        log.info("alert not delivered (owner has no Telegram linked):\n%s", text)
+
+
+def notifier_for(conn, item, default: Notifier) -> Notifier:
+    """Items with an owner go to that owner's Telegram; ownerless items (personal mode) use the default."""
+    if not item["user_id"]:
+        return default
+    if isinstance(default, ConsoleNotifier):   # dry run: print, don't send
+        return default
+    prof = db.get_profile(conn, item["user_id"])
+    if prof and prof["telegram_chat_id"]:
+        from .notify.telegram import TelegramNotifier
+        return TelegramNotifier(chat_id=prof["telegram_chat_id"])
+    return NullNotifier()
+
+
 def check_item(conn, item, fetcher: Fetcher, notifier: Notifier) -> List[str]:
     """Returns list of alert types sent for this item."""
     sent = []
+    notifier = notifier_for(conn, item, notifier)
     prev = db.last_checks(conn, item["id"], 1)
     prev = prev[0] if prev else None
     try:
@@ -110,15 +132,26 @@ def _handle_failure(conn, item, error: str, notifier: Notifier) -> List[str]:
 
 
 def run_checks(dry_run: bool = False, item_ids: Optional[List[int]] = None, db_path: Optional[str] = None,
-               notifier: Optional[Notifier] = None) -> dict:
+               notifier: Optional[Notifier] = None, due_only: bool = False) -> dict:
     """Check all active items. In dry-run mode nothing is committed and alerts are printed instead of sent."""
     # Dry run = one big transaction that is rolled back at the end (works for SQLite and Postgres).
     conn = db.connect(db_path, dry_run=dry_run)
-    notifier = notifier or get_notifier(dry_run=dry_run)
+    if notifier is None:
+        try:
+            notifier = get_notifier(dry_run=dry_run)
+        except RuntimeError as e:           # multi-user mode: no global channel is fine
+            log.warning("no default notifier (%s); only items with an owner get alerts", e)
+            notifier = NullNotifier()
     fetcher = Fetcher()
-    summary = {"checked": 0, "failed": 0, "alerts": []}
+    summary = {"checked": 0, "failed": 0, "alerts": [], "linked": 0}
     try:
-        items = db.list_items(conn, active_only=True)
+        if not dry_run and config.TELEGRAM_TOKEN:
+            try:
+                from .notify.telegram import link_users
+                summary["linked"] = link_users(conn)
+            except Exception as e:
+                log.warning("telegram link step failed: %s", e)
+        items = db.due_items(conn, config.CHECK_INTERVAL_HOURS) if due_only else db.list_items(conn, active_only=True)
         if item_ids:
             items = [i for i in items if i["id"] in item_ids]
         for item in items:

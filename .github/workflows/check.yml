@@ -1,57 +1,59 @@
 name: price check
 
+# Runs hourly, but only scrapes items that are due (never checked, or last checked more than
+# CHECK_INTERVAL_HOURS ago, default 6). So new items get their first price within the hour,
+# and everything else is checked every 6 hours. Runs with nothing due exit in ~20s.
 on:
   schedule:
-    # Every 6 hours (UTC). Edit this one line to change the interval, e.g. "0 */3 * * *" for every 3h.
-    # Note: GitHub may delay scheduled runs by up to ~15 minutes at busy times.
-    - cron: "0 */6 * * *"
-  workflow_dispatch:      # lets you press "Run workflow" in the Actions tab
+    - cron: "17 * * * *"
+  workflow_dispatch:
 
-# Never run two checks at once (they would both try to commit the DB).
 concurrency:
   group: pricewatch
   cancel-in-progress: false
 
 permissions:
-  contents: write         # commit data/pricewatch.db back
-  pages: write            # publish the dashboard
-  id-token: write
+  contents: write         # only used in SQLite mode (no DATABASE_URL) to commit the DB file
 
 jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}   # set -> Supabase/Postgres; empty -> SQLite file in the repo
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}       # Supabase; empty -> SQLite file in the repo
+      CHECK_INTERVAL_HOURS: ${{ vars.CHECK_INTERVAL_HOURS || '6' }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}   # personal-mode fallback only
+      NOTIFIER: ${{ vars.NOTIFIER || 'telegram' }}
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      TWILIO_SID: ${{ secrets.TWILIO_SID }}
+      TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
+      TWILIO_FROM: ${{ secrets.TWILIO_FROM }}
+      MY_PHONE: ${{ secrets.MY_PHONE }}
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-
       - run: pip install -r requirements.txt
 
+      - name: Anything due?
+        id: due
+        run: echo "count=$(python check.py --due-count)" >> "$GITHUB_OUTPUT"
+
       - name: Cache Playwright browsers
+        if: steps.due.outputs.count != '0'
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
-
-      - run: playwright install --with-deps chromium
+      - if: steps.due.outputs.count != '0'
+        run: playwright install --with-deps chromium
 
       - name: Check prices
-        env:
-          TWILIO_SID: ${{ secrets.TWILIO_SID }}
-          TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
-          TWILIO_FROM: ${{ secrets.TWILIO_FROM }}
-          MY_PHONE: ${{ secrets.MY_PHONE }}
-          NOTIFIER: ${{ vars.NOTIFIER || 'twilio' }}
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python check.py
+        # runs even with 0 due so Telegram "connect" links still get processed
+        run: python check.py --due
 
       - name: Commit price history (SQLite mode only)
         if: env.DATABASE_URL == ''
@@ -59,27 +61,8 @@ jobs:
           git config user.name "pricewatch bot"
           git config user.email "pricewatch@users.noreply.github.com"
           git add data/pricewatch.db
-          if git diff --cached --quiet; then
-            echo "no changes"
-          else
+          if git diff --cached --quiet; then echo "no changes"; else
             git commit -m "price check $(date -u +'%Y-%m-%d %H:%M UTC')"
             git pull --rebase -X theirs || true
             git push
           fi
-
-      - name: Build dashboard
-        run: python build_site.py
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-  publish:
-    needs: check
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - id: deploy
-        uses: actions/deploy-pages@v4

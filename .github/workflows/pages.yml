@@ -1,0 +1,47 @@
+name: pages
+
+# Publishes web/ (the app) to GitHub Pages whenever it changes.
+on:
+  push:
+    branches: [main]
+    paths: ["web/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write config.js from repo variables
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          TELEGRAM_BOT: ${{ vars.TELEGRAM_BOT }}
+          CHECK_INTERVAL_HOURS: ${{ vars.CHECK_INTERVAL_HOURS || '6' }}
+        run: |
+          cat > web/config.js <<CFG
+          window.PW_CONFIG = {
+            supabaseUrl: "${SUPABASE_URL}",
+            supabaseAnonKey: "${SUPABASE_ANON_KEY}",
+            telegramBot: "${TELEGRAM_BOT}",
+            checkIntervalHours: ${CHECK_INTERVAL_HOURS},
+          };
+          CFG
+          cat web/config.js
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deploy
+        uses: actions/deploy-pages@v4

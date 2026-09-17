@@ -73,25 +73,46 @@ for k in TWILIO_SID TWILIO_TOKEN TWILIO_FROM MY_PHONE TELEGRAM_TOKEN TELEGRAM_CH
 done
 "$GH" variable set NOTIFIER -b "$NOTIFIER" -R "$FULL"
 
+# --- web app config (public values) --------------------------------------
+if [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_ANON_KEY:-}" ]; then
+  "$GH" variable set SUPABASE_URL -b "$SUPABASE_URL" -R "$FULL"
+  "$GH" variable set SUPABASE_ANON_KEY -b "$SUPABASE_ANON_KEY" -R "$FULL"
+else
+  echo "NOTE: SUPABASE_URL / SUPABASE_ANON_KEY not in .env -> the web app will show 'not configured'."
+fi
+if [ -n "${TELEGRAM_TOKEN:-}" ]; then
+  BOT=$(curl -s "https://api.telegram.org/bot${TELEGRAM_TOKEN}/getMe" | sed -n 's/.*"username":"\([^"]*\)".*/\1/p')
+  [ -n "$BOT" ] && "$GH" variable set TELEGRAM_BOT -b "$BOT" -R "$FULL"
+fi
+if [ -n "${DATABASE_URL:-}" ]; then
+  echo "Applying Supabase row-level security ..."
+  PY=.venv/bin/python; [ -x "$PY" ] || PY=python3
+  "$PY" setup_supabase.py
+fi
+
 # --- permissions, Pages, first run ---------------------------------------
 "$GH" api -X PUT "repos/$FULL/actions/permissions/workflow" -f default_workflow_permissions=write -F can_approve_pull_request_reviews=false >/dev/null
 "$GH" api -X POST "repos/$FULL/pages" -f build_type=workflow >/dev/null 2>&1 || true
 # Workflows register a few seconds after the first push; retry once.
-"$GH" workflow run check.yml -R "$FULL" >/dev/null 2>&1 || { sleep 6; "$GH" workflow run check.yml -R "$FULL" >/dev/null 2>&1 || true; }
+for wf in pages.yml check.yml; do
+  "$GH" workflow run $wf -R "$FULL" >/dev/null 2>&1 || { sleep 6; "$GH" workflow run $wf -R "$FULL" >/dev/null 2>&1 || true; }
+done
 
 cat <<MSG
 
 Deployed.
 
-  Dashboard (live after the first run, ~2 min):  https://$OWNER.github.io/$NAME/
-  Add / remove items:  https://github.com/$FULL/actions/workflows/manage.yml  -> "Run workflow"
-  Runs & logs:         https://github.com/$FULL/actions
+  App (live in ~1 min):  https://$OWNER.github.io/$NAME/
+  Runs & logs:           https://github.com/$FULL/actions
+
+In Supabase -> Authentication -> URL Configuration, set Site URL to the app link above
+(and add it under Redirect URLs) so Google / email sign-in returns to the app.
 
 MSG
 if [ -n "${DATABASE_URL:-}" ]; then
-  echo "Storage: Supabase/Postgres (DATABASE_URL). The SQLite file in the repo is no longer used."
+  echo "Storage: Supabase/Postgres. Sign-in and per-user items are on."
 else
-  echo "Storage: SQLite file committed to the repo. Set DATABASE_URL in .env to use Supabase instead."
+  echo "Storage: SQLite file in the repo (personal mode). Set DATABASE_URL in .env for the multi-user app."
 fi
 if [ "$NOTIFIER" = "telegram" ]; then
   echo "Notifications: Telegram bot (chat id $TELEGRAM_CHAT_ID)."

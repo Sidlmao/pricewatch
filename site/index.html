@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pricewatch</title>
+<style>
+  :root { --fg:#111; --muted:#777; --line:#e4e4e4; --bg:#fff; --ok:#1a7f37; --bad:#b42318; --accent:#2f5fd0; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:32px 16px 64px; background:var(--bg); color:var(--fg);
+         font:15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width:860px; margin:0 auto; }
+  h1 { font-size:20px; font-weight:600; margin:0 0 20px; }
+  form.add { display:grid; grid-template-columns: 1fr 90px 110px auto auto; gap:8px; align-items:center; margin-bottom:28px; }
+  form.add input[type=text], form.add input[type=number] { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px; font:inherit; }
+  form.add label.chk { font-size:13px; color:var(--muted); white-space:nowrap; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:6px; background:#fafafa; font:inherit; font-size:13px; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.link { border:none; background:none; color:var(--muted); padding:4px 6px; }
+  button.link:hover { color:var(--fg); }
+  .flash { background:#f4f7ff; border:1px solid #d9e2ff; padding:8px 12px; border-radius:6px; margin-bottom:16px; font-size:14px; }
+  .item { display:grid; grid-template-columns: 56px 1fr 180px auto; gap:16px; align-items:center;
+          padding:14px 0; border-top:1px solid var(--line); }
+  .item:last-child { border-bottom:1px solid var(--line); }
+  .item.paused { opacity:.5; }
+  .thumb { width:56px; height:56px; object-fit:cover; border-radius:6px; background:#f2f2f2; }
+  .name { font-weight:500; text-decoration:none; color:var(--fg); }
+  .name:hover { text-decoration:underline; }
+  .meta { color:var(--muted); font-size:13px; margin-top:2px; }
+  .price { font-size:17px; font-weight:600; }
+  .was { color:var(--muted); text-decoration:line-through; font-weight:400; font-size:13px; margin-left:6px; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); }
+  .actions { display:flex; gap:2px; }
+  .actions form { display:inline; }
+  svg.spark { display:block; }
+  .empty { color:var(--muted); padding:40px 0; text-align:center; }
+  .hint { color:var(--muted); font-size:13px; margin-top:24px; }
+  @media (max-width:640px) {
+    form.add { grid-template-columns:1fr 1fr; }
+    form.add input[name=url] { grid-column:1 / -1; }
+    .item { grid-template-columns:48px 1fr; }
+    .item .chartcell, .item .actions { grid-column:2; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>pricewatch</h1>
+
+  
+
+  
+
+  
+
+  
+  <div class="item">
+    <img class="thumb" src="https://media.endclothing.com/media/catalog/product/2/4/24-02-2026-JW_CL0196-BM0_1_1.jpg" alt="">
+    <div>
+      <a class="name" href="https://www.endclothing.com/us/acne-studios-exford-1996-t-shirt-cl0196-bm0.html" target="_blank" rel="noopener">Acne Studios Exford 1996 T-Shirt</a>
+      <div class="meta">
+        end · size Medium
+        · checked just now
+        
+      </div>
+      <div class="meta">
+        <span class="ok">in stock</span>
+         · low $369.00
+        
+      </div>
+    </div>
+    <div class="chartcell">
+      <div class="price">$369.00</div>
+      
+    </div>
+    <div class="actions"><span class="meta">#2</span></div>
+  </div>
+  
+  <div class="item">
+    <img class="thumb" src="https://static.nike.com/a/images/t_default/u_9ddf04c7-2a9a-4d76-add1-d15af8f0263d,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/417cdfb4-fe10-4e01-8ed0-ae5d8357792a/M+NL+SOLO+SWSH+BB+PO+HOODIE+UF.png" alt="">
+    <div>
+      <a class="name" href="https://www.nike.com/t/solo-swoosh-mens-pullover-hoodie-2nbny689/IQ1002-045" target="_blank" rel="noopener">Nike Solo Swoosh Men&#39;s Pullover Hoodie</a>
+      <div class="meta">
+        nike · size M · target $60.00 · restock alerts
+        · checked just now
+        
+      </div>
+      <div class="meta">
+        <span class="ok">in stock</span>
+         · low $57.97
+         · target hit just now
+      </div>
+    </div>
+    <div class="chartcell">
+      <div class="price">$57.97<span class="was">$95.00</span></div>
+      
+    </div>
+    <div class="actions"><span class="meta">#1</span></div>
+  </div>
+  
+  <div class="item">
+    <div class="thumb"></div>
+    <div>
+      <a class="name" href="https://www.uniqlo.com/us/en/products/E471808-000/00?colorDisplayCode=03" target="_blank" rel="noopener">https://www.uniqlo.com/us/en/products/E471808-000/00?colorDisplayCode=03</a>
+      <div class="meta">
+         · size L · target 40.00 · restock alerts
+        · checked never
+        
+      </div>
+      <div class="meta">
+        
+        
+        
+      </div>
+    </div>
+    <div class="chartcell">
+      <div class="price" style="color:var(--muted)">–</div>
+      
+    </div>
+    <div class="actions"><span class="meta">#7</span></div>
+  </div>
+  
+  <div class="item">
+    <div class="thumb"></div>
+    <div>
+      <a class="name" href="https://www.nike.com/t/solo-swoosh-mens-pullover-hoodie-2nbny689/IQ1002-045" target="_blank" rel="noopener">https://www.nike.com/t/solo-swoosh-mens-pullover-hoodie-2nbny689/IQ1002-045</a>
+      <div class="meta">
+         · size M · target 60.00 · restock alerts
+        · checked never
+        
+      </div>
+      <div class="meta">
+        
+        
+        
+      </div>
+    </div>
+    <div class="chartcell">
+      <div class="price" style="color:var(--muted)">–</div>
+      
+    </div>
+    <div class="actions"><span class="meta">#6</span></div>
+  </div>
+  
+  <div class="item">
+    <div class="thumb"></div>
+    <div>
+      <a class="name" href="https://www.amazon.com/dp/B002GHC1SE" target="_blank" rel="noopener">https://www.amazon.com/dp/B002GHC1SE</a>
+      <div class="meta">
+         · size Large · restock alerts
+        · checked never
+        
+      </div>
+      <div class="meta">
+        
+        
+        
+      </div>
+    </div>
+    <div class="chartcell">
+      <div class="price" style="color:var(--muted)">–</div>
+      
+    </div>
+    <div class="actions"><span class="meta">#5</span></div>
+  </div>
+  
+  <div class="item">
+    <div class="thumb"></div>
+    <div>
+      <a class="name" href="https://www.grailed.com/listings/103978723-nike-canada-soccer-away-jersey" target="_blank" rel="noopener">https://www.grailed.com/listings/103978723-nike-canada-soccer-away-jersey</a>
+      <div class="meta">
+         · size M · restock alerts
+        · checked never
+        
+      </div>
+      <div class="meta">
+        
+        
+        
+      </div>
+    </div>
+    <div class="chartcell">
+      <div class="price" style="color:var(--muted)">–</div>
+      
+    </div>
+    <div class="actions"><span class="meta">#4</span></div>
+  </div>
+  
+  <div class="item">
+    <div class="thumb"></div>
+    <div>
+      <a class="name" href="https://www.ssense.com/en-us/men/product/acne-studios/black-sprayed-1996-logo-t-shirt/19489171" target="_blank" rel="noopener">https://www.ssense.com/en-us/men/product/acne-studios/black-sprayed-1996-logo-t-shirt/19489171</a>
+      <div class="meta">
+         · size XL · restock alerts
+        · checked never
+        
+      </div>
+      <div class="meta">
+        
+        
+        
+      </div>
+    </div>
+    <div class="chartcell">
+      <div class="price" style="color:var(--muted)">–</div>
+      
+    </div>
+    <div class="actions"><span class="meta">#3</span></div>
+  </div>
+  
+
+  
+  <p class="hint">Built 2026-09-17 19:41 UTC. Checks run every 6 hours. Dashed line on the chart is your target price.
+  </p>
+  
+</main>
+</body>
+</html>
