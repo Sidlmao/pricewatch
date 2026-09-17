@@ -54,6 +54,9 @@ OWNER=${FULL%%/*}; NAME=${FULL##*/}
 # --- secrets from .env ----------------------------------------------------
 [ -f .env ] && set -a && . ./.env && set +a
 NOTIFIER="${NOTIFIER:-twilio}"
+if [ "$NOTIFIER" = "twilio" ] && [ -z "${TWILIO_SID:-}" ] && [ -n "${TELEGRAM_TOKEN:-}" ]; then
+  NOTIFIER=telegram
+fi
 if [ "$NOTIFIER" = "twilio" ] && [ -z "${TWILIO_SID:-}" ]; then
   echo "No Twilio credentials in .env yet -> using free ntfy.sh push notifications for now."
   NOTIFIER=ntfy
@@ -65,7 +68,7 @@ if [ "$NOTIFIER" = "ntfy" ]; then
   fi
   "$GH" secret set NTFY_TOPIC -b "$NTFY_TOPIC" -R "$FULL"
 fi
-for k in TWILIO_SID TWILIO_TOKEN TWILIO_FROM MY_PHONE; do
+for k in TWILIO_SID TWILIO_TOKEN TWILIO_FROM MY_PHONE TELEGRAM_TOKEN TELEGRAM_CHAT_ID; do
   v="${!k:-}"; [ -n "$v" ] && "$GH" secret set "$k" -b "$v" -R "$FULL"
 done
 "$GH" variable set NOTIFIER -b "$NOTIFIER" -R "$FULL"
@@ -85,6 +88,9 @@ Deployed.
   Runs & logs:         https://github.com/$FULL/actions
 
 MSG
+if [ "$NOTIFIER" = "telegram" ]; then
+  echo "Notifications: Telegram bot (chat id $TELEGRAM_CHAT_ID)."
+fi
 if [ "$NOTIFIER" = "ntfy" ]; then
 cat <<MSG
 Notifications: install the ntfy app (iOS/Android), tap +, subscribe to topic:

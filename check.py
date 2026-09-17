@@ -8,6 +8,7 @@
   python check.py --remove ID
   python check.py --toggle ID     pause / resume
   python check.py --test-sms      send one test message through the configured notifier
+  python check.py --telegram-setup  connect a Telegram bot (asks for the token, finds your chat id)
 """
 import argparse
 import logging
@@ -19,6 +20,32 @@ from pricewatch.checker import run_checks
 from pricewatch.prices import fmt
 
 
+def telegram_setup():
+    import os, time
+    from pricewatch import config
+    from pricewatch.notify.telegram import find_chat_id
+    token = config.TELEGRAM_TOKEN or input("Paste the bot token from @BotFather: ").strip()
+    print("Now open Telegram, find your bot, press Start and send it any message. Waiting...")
+    for _ in range(60):
+        found = find_chat_id(token)
+        if found:
+            chat_id, who = found
+            env = os.path.join(config.ROOT, ".env")
+            lines = [l for l in (open(env).read().splitlines() if os.path.exists(env) else [])
+                     if not l.startswith(("TELEGRAM_TOKEN=", "TELEGRAM_CHAT_ID=", "NOTIFIER="))]
+            lines += [f"NOTIFIER=telegram", f"TELEGRAM_TOKEN={token}", f"TELEGRAM_CHAT_ID={chat_id}"]
+            open(env, "w").write("\n".join(lines) + "\n")
+            print(f"Got it: chat id {chat_id} ({who}). Saved to .env with NOTIFIER=telegram.")
+            os.environ.update(NOTIFIER="telegram", TELEGRAM_TOKEN=token, TELEGRAM_CHAT_ID=str(chat_id))
+            config.NOTIFIER, config.TELEGRAM_TOKEN, config.TELEGRAM_CHAT_ID = "telegram", token, str(chat_id)
+            from pricewatch.notify import get_notifier
+            get_notifier().send("pricewatch is connected to Telegram ✅")
+            print("Sent you a test message. Run ./deploy.sh to push this to GitHub.")
+            return 0
+        time.sleep(2)
+    print("No message received in 2 minutes. Send your bot a message and run this again."); return 1
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="Personal clothing price tracker")
     p.add_argument("--dry-run", action="store_true", help="print alerts instead of sending; DB untouched")
@@ -27,7 +54,8 @@ def main(argv=None):
     p.add_argument("--restock", action="store_true", help="also alert when the size comes back in stock")
     p.add_argument("--list", action="store_true"); p.add_argument("--remove", type=int, metavar="ID")
     p.add_argument("--toggle", type=int, metavar="ID", help="pause or resume an item")
-    p.add_argument("--test-sms", action="store_true")
+    p.add_argument("--test-sms", action="store_true", help="send one test message via the configured notifier")
+    p.add_argument("--telegram-setup", action="store_true", help="find your Telegram chat id and save it to .env")
     p.add_argument("-v", "--verbose", action="store_true")
     a = p.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -56,6 +84,8 @@ def main(argv=None):
             print(f"no item {a.toggle}"); return 1
         db.update_item_meta(conn, a.toggle, active=0 if it["active"] else 1)
         print(f"item {a.toggle} {'paused' if it['active'] else 'resumed'}"); return 0
+    if a.telegram_setup:
+        return telegram_setup()
     if a.test_sms:
         from pricewatch.notify import get_notifier
         get_notifier().send("pricewatch test: notifications are working ✅"); print("sent"); return 0

@@ -47,6 +47,8 @@ jobs:
           MY_PHONE: ${{ secrets.MY_PHONE }}
           NOTIFIER: ${{ vars.NOTIFIER || 'twilio' }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python check.py
 
       - name: Commit price history

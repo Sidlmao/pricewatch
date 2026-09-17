@@ -66,17 +66,25 @@ Trial messages carry a "Sent from your Twilio trial account" prefix. If you upgr
 paid account and text a US number, Twilio may require A2P 10DLC registration for a local
 number; a toll-free number with toll-free verification is the simplest route.
 
-### Using something other than Twilio
+### Telegram instead of SMS (free, recommended)
 
-The notifier is one small class (`pricewatch/notify/base.py`). Two are included:
+1. In Telegram, message **@BotFather**, send `/newbot`, pick a name, and copy the token it gives you.
+2. Run `python check.py --telegram-setup`, paste the token, then send your new bot any
+   message. It finds your chat id, writes both to `.env`, and sends you a test message.
+3. Run `./deploy.sh` (again, if you already deployed) to push the values to GitHub.
+
+### Other notifiers
+
+The notifier is one small class (`pricewatch/notify/base.py`). Included:
 
 - `NOTIFIER=twilio` (default)
+- `NOTIFIER=telegram` with `TELEGRAM_TOKEN` and `TELEGRAM_CHAT_ID` (see above)
 - `NOTIFIER=ntfy` with `NTFY_TOPIC=<a long random string>` sends free push notifications
   via https://ntfy.sh. Install the ntfy app and subscribe to the same topic. No account
   needed.
 - `NOTIFIER=console` just prints.
 
-To add Telegram or anything else, subclass `Notifier`, implement `send(text)`, and add a
+To add Discord, Slack or anything else, subclass `Notifier`, implement `send(text)`, and add a
 branch in `get_notifier()`.
 
 ## Deploy (one command)
@@ -187,7 +195,7 @@ pricewatch/
   db.py                  SQLite schema and helpers (items, price_history, alerts)
   checker.py             the check + alert rules
   extractors/            one file per store + generic fallback
-  notify/                Notifier interface: twilio, ntfy, console
+  notify/                Notifier interface: twilio, telegram, ntfy, console
 data/pricewatch.db       the database (committed)
 .github/workflows/       check.yml = the 6-hourly cron + dashboard, manage.yml = add/remove form
 ```

@@ -31,7 +31,10 @@ def get_notifier(dry_run: bool = False) -> Notifier:
     if config.NOTIFIER == "twilio":
         from .twilio_sms import TwilioNotifier
         return TwilioNotifier()
+    if config.NOTIFIER == "telegram":
+        from .telegram import TelegramNotifier
+        return TelegramNotifier()
     if config.NOTIFIER == "ntfy":
         from .ntfy import NtfyNotifier
         return NtfyNotifier()
-    raise ValueError(f"unknown NOTIFIER={config.NOTIFIER!r} (use twilio, ntfy or console)")
+    raise ValueError(f"unknown NOTIFIER={config.NOTIFIER!r} (use twilio, telegram, ntfy or console)")
