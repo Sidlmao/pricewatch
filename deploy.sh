@@ -89,7 +89,7 @@ else
   echo "NOTE: SUPABASE_URL / SUPABASE_ANON_KEY not in .env -> the web app will show 'not configured'."
 fi
 if [ -n "${TELEGRAM_TOKEN:-}" ]; then
-  BOT=$(curl -s "https://api.telegram.org/bot${TELEGRAM_TOKEN}/getMe" | sed -n 's/.*"username":"\([^"]*\)".*/\1/p')
+  BOT=$(curl -s --max-time 15 "https://api.telegram.org/bot${TELEGRAM_TOKEN}/getMe" 2>/dev/null | sed -n 's/.*"username":"\([^"]*\)".*/\1/p' || true)
   [ -n "$BOT" ] && "$GH" variable set TELEGRAM_BOT -b "$BOT" -R "$FULL"
 fi
 if [ -n "${DATABASE_URL:-}" ]; then
