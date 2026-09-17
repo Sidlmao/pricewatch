@@ -52,7 +52,15 @@ FULL=$("$GH" repo view --json nameWithOwner -q .nameWithOwner)
 OWNER=${FULL%%/*}; NAME=${FULL##*/}
 
 # --- secrets from .env ----------------------------------------------------
-[ -f .env ] && set -a && . ./.env && set +a
+# Read .env literally (no shell expansion: passwords may contain $ or backticks).
+if [ -f .env ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue;; esac
+    key="${line%%=*}"; val="${line#*=}"
+    case "$key" in *[!A-Za-z0-9_]*) continue;; esac
+    export "$key=$val"
+  done < .env
+fi
 NOTIFIER="${NOTIFIER:-twilio}"
 if [ "$NOTIFIER" = "twilio" ] && [ -z "${TWILIO_SID:-}" ] && [ -n "${TELEGRAM_TOKEN:-}" ]; then
   NOTIFIER=telegram
