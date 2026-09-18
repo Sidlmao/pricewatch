@@ -40,6 +40,8 @@ jobs:
           };
           CFG
           cat web/config.js
+          # cache-bust: browsers cache Pages files for 10 min; tie the config URL to this commit
+          sed -i "s#./config.js#./config.js?v=${GITHUB_SHA::8}#" web/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
