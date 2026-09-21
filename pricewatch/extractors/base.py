@@ -3,7 +3,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from typing import Dict, Iterator, List, Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qsl
 
 from bs4 import BeautifulSoup
 
@@ -140,6 +140,53 @@ def _offer_price(offer: dict):
     return amount, cur2
 
 
+def _size_label(size) -> Optional[str]:
+    """schema.org lets `size` be a string, a SizeSpecification, or a list mixing both (Lululemon:
+    ["S", {"@type": "SizeSpecification", ...inseam...}]). Return the plain label."""
+    if isinstance(size, list):
+        for x in size:
+            lbl = _size_label(x)
+            if lbl:
+                return lbl
+        return None
+    if isinstance(size, dict):
+        v = size.get("name") or size.get("value")
+        return str(v) if v else None
+    return str(size) if size not in (None, "") else None
+
+
+_SIZE_PARAMS = {"sz", "size", "dwvar_size", "variant_size"}
+
+
+def _variant_url(v: dict) -> Optional[str]:
+    u = v.get("url")
+    if not u:
+        off = v.get("offers")
+        off = off[0] if isinstance(off, list) and off else off
+        u = off.get("url") if isinstance(off, dict) else None
+    return u if isinstance(u, str) else None
+
+
+def select_variants(variants: List[dict], url: str) -> List[dict]:
+    """Stores like Lululemon list every colour x size as a variant, each with its own URL
+    (...?color=72761&sz=S). Taking the cheapest of all of them reports a clearance colour's price.
+    If the tracked URL carries query params, keep only variants whose URL agrees on every one of
+    them (ignoring size params, so all sizes of the chosen colour survive for stock tracking).
+    Falls back to all variants when nothing matches (or the URL has no params)."""
+    want = {k.lower(): v for k, v in parse_qsl(urlparse(url).query) if k.lower() not in _SIZE_PARAMS}
+    if not want:
+        return variants
+    keep = []
+    for v in variants:
+        vu = _variant_url(v)
+        if not vu:
+            continue
+        have = {k.lower(): val for k, val in parse_qsl(urlparse(vu).query)}
+        if all(have.get(k) == val for k, val in want.items()):
+            keep.append(v)
+    return keep or variants
+
+
 def product_from_json_ld(blocks: List[dict], url: str, store: str) -> Optional[ProductInfo]:
     for obj in blocks:
         if not (_is_type(obj, "Product") or _is_type(obj, "ProductGroup")):
@@ -154,7 +201,11 @@ def product_from_json_ld(blocks: List[dict], url: str, store: str) -> Optional[P
         info.image_url = img
         offers = obj.get("offers")
         offers = offers if isinstance(offers, list) else ([offers] if offers else [])
-        variants = obj.get("hasVariant") or []
+        variants = [v for v in (obj.get("hasVariant") or []) if isinstance(v, dict)]
+        chosen = select_variants(variants, url)
+        if chosen is not variants:
+            offers = []     # the group's own offers/AggregateOffer span all colours; the chosen variants are the truth
+        variants = chosen
         prices, avail = [], []
         for off in offers:
             if not isinstance(off, dict):
@@ -181,9 +232,9 @@ def product_from_json_ld(blocks: List[dict], url: str, store: str) -> Optional[P
                 prices.append(amount); info.currency = info.currency or cur
             if a is not None:
                 avail.append(a)
-            size = v.get("size")
+            size = _size_label(v.get("size"))
             if size and a is not None:
-                info.sizes[str(size)] = a
+                info.sizes[size] = a
             if not info.image_url and v.get("image"):
                 info.image_url = v["image"] if isinstance(v["image"], str) else None
         if prices:

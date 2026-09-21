@@ -1,4 +1,5 @@
 """Check every active item once, record history, and send alerts (deduplicated via the alerts table)."""
+import json
 import logging
 from typing import List, Optional
 
@@ -75,13 +76,18 @@ def check_item(conn, item, fetcher: Fetcher, notifier: Notifier) -> List[str]:
     except (ScrapeError, FetchError, RobotsDisallowed) as e:
         return _handle_failure(conn, item, str(e), notifier)
 
-    in_stock, _ = stock_for_size(info, item["size"])
+    in_stock, matched = stock_for_size(info, item["size"])
     db.record_price(conn, item["id"], info.price, in_stock, original_price=info.original_price)
-    meta = {"fail_count": 0, "last_error": None}
+    meta = {"fail_count": 0, "last_error": None, "check_requested": 0}
     for k in ("name", "image_url", "store", "currency"):
         if getattr(info, k) and not item[k]:
             meta[k] = getattr(info, k)
+    if info.sizes:   # remember what sizes the page offers so the app can show a size picker / warn on typos
+        meta["sizes_json"] = json.dumps({str(k): bool(v) for k, v in info.sizes.items()})
     db.update_item_meta(conn, item["id"], **meta)
+    if item["size"] and info.sizes and not matched:
+        log.info("%s: size %r not on the page (has: %s)", item["name"] or item["url"], item["size"],
+                 ", ".join(list(info.sizes)[:12]))
     item = db.get_item(conn, item["id"])
     price, cur = info.price, info.currency or item["currency"]
     prev_price = prev["price"] if prev else None
@@ -101,7 +107,7 @@ def check_item(conn, item, fetcher: Fetcher, notifier: Notifier) -> List[str]:
                 notifier.send(build_message("target_hit", item, old, price, cur))
                 db.record_alert(conn, item["id"], "target_hit", old, price)
                 sent.append("target_hit")
-    elif prev_price is not None and price is not None and price < prev_price:
+    elif prev_price is not None and price is not None and _significant_drop(prev_price, price):
         last = db.last_alert(conn, item["id"], "price_drop")
         if not (last and last["new_price"] == price and last["old_price"] == prev_price):
             notifier.send(build_message("price_drop", item, prev_price, price, cur))
@@ -118,9 +124,17 @@ def check_item(conn, item, fetcher: Fetcher, notifier: Notifier) -> List[str]:
     return sent
 
 
+def _significant_drop(prev: float, new: float) -> bool:
+    """A no-target item alerts on any drop, except rounding noise (< MIN_DROP_PCT of the old price)."""
+    if new >= prev:
+        return False
+    return (prev - new) >= prev * config.MIN_DROP_PCT / 100
+
+
 def _handle_failure(conn, item, error: str, notifier: Notifier) -> List[str]:
     count = (item["fail_count"] or 0) + 1
-    db.update_item_meta(conn, item["id"], fail_count=count, last_error=error[:300])
+    # clear check_requested too, otherwise a broken link would be retried every run
+    db.update_item_meta(conn, item["id"], fail_count=count, last_error=error[:300], check_requested=0)
     db.record_price(conn, item["id"], None, None)
     log.warning("%s: check failed (%d/%d): %s", _label(item), count, config.FAIL_THRESHOLD, error)
     if count == config.FAIL_THRESHOLD:           # exactly once per failure streak
@@ -148,7 +162,7 @@ def run_checks(dry_run: bool = False, item_ids: Optional[List[int]] = None, db_p
         if not dry_run and config.TELEGRAM_TOKEN:
             try:
                 from .notify.telegram import link_users
-                summary["linked"] = link_users(conn)
+                summary["linked"] = link_users(conn, app_url=config.APP_URL)
             except Exception as e:
                 log.warning("telegram link step failed: %s", e)
         items = db.due_items(conn, config.CHECK_INTERVAL_HOURS) if due_only else db.list_items(conn, active_only=True)

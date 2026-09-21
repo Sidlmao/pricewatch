@@ -5,4 +5,6 @@ window.PW_CONFIG = {
   supabaseAnonKey: "",
   telegramBot: "",
   checkIntervalHours: 6,
+  maxItems: 100,
+  cronMinutes: [7, 22, 37, 52],   // minutes past the hour the checker runs (see check.yml)
 };

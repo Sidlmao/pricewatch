@@ -35,11 +35,13 @@ def find_chat_id(token: str):
 
 
 UUID_RE = __import__("re").compile(r"^/start\s+([0-9a-fA-F-]{36})\s*$")
+BARE_START_RE = __import__("re").compile(r"^/start\s*$")
 
 
-def link_users(conn) -> int:
+def link_users(conn, app_url: str = None) -> int:
     """Users press 'Connect Telegram' in the web app, which opens t.me/<bot>?start=<user_id>.
-    The bot receives '/start <user_id>'; here we map that chat to the user. Returns how many were linked."""
+    The bot receives '/start <user_id>'; here we map that chat to the user. Returns how many were linked.
+    Someone who opens the bot on their own (bare /start, or any other text) gets told how to connect."""
     from .. import db
     if not config.TELEGRAM_TOKEN:
         return 0
@@ -47,19 +49,32 @@ def link_users(conn) -> int:
     r = requests.get(f"https://api.telegram.org/bot{config.TELEGRAM_TOKEN}/getUpdates",
                      params={"offset": offset, "timeout": 0}, timeout=20)
     r.raise_for_status()
-    linked, last = 0, None
+    linked, last, replied = 0, None, set()
     for upd in r.json().get("result", []):
         last = upd["update_id"]
         msg = upd.get("message") or {}
-        m = UUID_RE.match(msg.get("text") or "")
+        text = msg.get("text") or ""
         chat = msg.get("chat") or {}
-        if m and chat.get("id"):
-            db.set_telegram(conn, m.group(1), chat["id"])
+        if not chat.get("id"):
+            continue
+        m = UUID_RE.match(text)
+        if m:
+            who = chat.get("username") and "@" + chat["username"] or chat.get("first_name") or chat.get("title")
+            db.set_telegram(conn, m.group(1), chat["id"], who)
             linked += 1
             try:
                 TelegramNotifier(chat_id=chat["id"]).send("pricewatch connected ✅ You'll get price alerts here.")
             except Exception as e:
                 log.warning("could not confirm telegram link: %s", e)
+        elif chat.get("type") == "private" and chat["id"] not in replied:
+            replied.add(chat["id"])
+            try:
+                where = f"open {app_url}" if app_url else "open the pricewatch app"
+                TelegramNotifier(chat_id=chat["id"]).send(
+                    f"Hi! This bot only sends alerts. To connect it to your account, {where}, sign in and tap "
+                    "\"Connect Telegram\". That brings you back here with a link code and you're done.")
+            except Exception as e:
+                log.warning("could not reply to unknown chat: %s", e)
     if last is not None:
         db.set_setting(conn, "telegram_offset", last + 1)
     return linked

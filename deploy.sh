@@ -80,6 +80,9 @@ for k in TWILIO_SID TWILIO_TOKEN TWILIO_FROM MY_PHONE TELEGRAM_TOKEN TELEGRAM_CH
   v="${!k:-}"; [ -n "$v" ] && "$GH" secret set "$k" -b "$v" -R "$FULL"
 done
 "$GH" variable set NOTIFIER -b "$NOTIFIER" -R "$FULL"
+"$GH" variable set APP_URL -b "https://$OWNER.github.io/$NAME/" -R "$FULL"      # the bot mentions it when someone messages it cold
+[ -n "${MAX_ITEMS_PER_USER:-}" ] && "$GH" variable set MAX_ITEMS_PER_USER -b "$MAX_ITEMS_PER_USER" -R "$FULL"
+[ -n "${MIN_DROP_PCT:-}" ] && "$GH" variable set MIN_DROP_PCT -b "$MIN_DROP_PCT" -R "$FULL"
 
 # --- web app config (public values) --------------------------------------
 if [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_ANON_KEY:-}" ]; then
