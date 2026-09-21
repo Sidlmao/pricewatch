@@ -4,18 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>pricewatch</title>
+<meta name="description" content="Track prices on clothes you want. Paste a link, get a message when it drops or your size is back.">
 <meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#2f5fd0">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="pricewatch">
 <style>
   :root {
     --bg:#fafafa; --card:#fff; --fg:#161616; --muted:#6b6b6b; --line:#e6e6e6; --line-strong:#cfcfcf;
-    --accent:#2f5fd0; --accent-ink:#fff; --ok:#1a7f37; --bad:#b42318; --warn:#9a6700;
-    --tip-bg:#161616; --tip-fg:#fff; --shadow:0 1px 2px rgba(0,0,0,.05);
+    --accent:#2f5fd0; --accent-ink:#fff; --accent-soft:#eaf0fd; --ok:#1a7f37; --bad:#b42318; --warn:#9a6700;
+    --ok-soft:#e6f4ea; --bad-soft:#fdecea; --warn-soft:#fff6d9;
+    --tip-bg:#161616; --tip-fg:#fff; --shadow:0 1px 2px rgba(0,0,0,.05); --shadow-pop:0 8px 28px rgba(0,0,0,.14);
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#111214; --card:#1a1b1e; --fg:#ececec; --muted:#9a9a9a; --line:#2a2b2f; --line-strong:#3a3b40;
-            --accent:#7b9cf0; --accent-ink:#0d1330; --ok:#4cc38a; --bad:#f08080; --warn:#e2b340;
-            --tip-bg:#ececec; --tip-fg:#111; --shadow:none; }
+    :root:not([data-theme="light"]) { --bg:#111214; --card:#1a1b1e; --fg:#ececec; --muted:#9a9a9a; --line:#2a2b2f; --line-strong:#3a3b40;
+            --accent:#7b9cf0; --accent-ink:#0d1330; --accent-soft:#1f2a45; --ok:#4cc38a; --bad:#f08080; --warn:#e2b340;
+            --ok-soft:#17301f; --bad-soft:#3a1c1c; --warn-soft:#3a3115;
+            --tip-bg:#ececec; --tip-fg:#111; --shadow:none; --shadow-pop:0 8px 28px rgba(0,0,0,.5); }
   }
+  :root[data-theme="dark"] { --bg:#111214; --card:#1a1b1e; --fg:#ececec; --muted:#9a9a9a; --line:#2a2b2f; --line-strong:#3a3b40;
+            --accent:#7b9cf0; --accent-ink:#0d1330; --accent-soft:#1f2a45; --ok:#4cc38a; --bad:#f08080; --warn:#e2b340;
+            --ok-soft:#17301f; --bad-soft:#3a1c1c; --warn-soft:#3a3115;
+            --tip-bg:#ececec; --tip-fg:#111; --shadow:none; --shadow-pop:0 8px 28px rgba(0,0,0,.5); }
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
   html { background:var(--bg); }
@@ -23,10 +36,10 @@
          font:15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif; }
   main { max-width:880px; margin:0 auto; }
   a { color:inherit; }
-  header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:22px 0 18px; }
-  .brand { font-weight:650; font-size:18px; letter-spacing:-.01em; text-decoration:none; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:22px 0 18px; position:relative; }
+  .brand { font-weight:650; font-size:18px; letter-spacing:-.01em; text-decoration:none; display:flex; align-items:center; gap:8px; }
   .brand span { color:var(--accent); }
-  .who { color:var(--muted); font-size:13px; display:flex; gap:10px; align-items:center; }
+  .brand img { width:22px; height:22px; border-radius:6px; }
   button { font:inherit; font-size:14px; padding:8px 12px; border:1px solid var(--line-strong); border-radius:8px;
            background:var(--card); color:var(--fg); cursor:pointer; }
   button:hover { border-color:var(--fg); }
@@ -34,62 +47,271 @@
   button.primary:hover { filter:brightness(1.08); }
   button.link { border:none; background:none; color:var(--muted); padding:4px 6px; }
   button.link:hover { color:var(--fg); }
+  button.link.danger:hover { color:var(--bad); }
   button:disabled { opacity:.5; cursor:default; }
-  input[type=text], input[type=url], input[type=email], input[type=number] {
+  button.small { font-size:13px; padding:5px 9px; }
+  input[type=text], input[type=url], input[type=email], input[type=number], input[type=search], select {
     font:inherit; padding:9px 11px; border:1px solid var(--line-strong); border-radius:8px; background:var(--card); color:var(--fg); width:100%; }
-  input:focus { outline:2px solid var(--accent); outline-offset:1px; border-color:transparent; }
+  input:focus, select:focus { outline:2px solid var(--accent); outline-offset:1px; border-color:transparent; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; box-shadow:var(--shadow); }
-  .card h1 { font-size:22px; margin:0 0 6px; letter-spacing:-.01em; }
+  .card h1 { font-size:24px; margin:0 0 6px; letter-spacing:-.01em; line-height:1.2; }
   .card p { margin:0 0 16px; color:var(--muted); }
-  .signin { max-width:420px; margin:48px auto 0; }
+
+  /* sign-in */
+  .signin { max-width:440px; margin:40px auto 0; }
   .signin .g { width:100%; display:flex; gap:10px; justify-content:center; align-items:center; padding:11px; font-size:15px; }
   .or { display:flex; align-items:center; gap:12px; color:var(--muted); font-size:12px; margin:16px 0; }
   .or::before, .or::after { content:""; flex:1; height:1px; background:var(--line); }
   .row { display:flex; gap:8px; }
   .row button { white-space:nowrap; }
-  .notice { border:1px solid var(--line); background:var(--card); border-radius:10px; padding:10px 14px; font-size:14px; margin:0 0 16px; display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; }
+  .steps { max-width:440px; margin:22px auto 0; display:grid; gap:10px; color:var(--muted); font-size:14px; }
+  .steps div { display:flex; gap:10px; align-items:flex-start; }
+  .steps b { color:var(--accent); font-weight:600; min-width:18px; }
+  .stores { max-width:440px; margin:18px auto 0; text-align:center; color:var(--muted); font-size:13px; line-height:1.9; }
+  .stores span { border:1px solid var(--line); border-radius:999px; padding:2px 9px; margin:0 2px; white-space:nowrap; }
+
+  /* account menu */
+  .who { display:flex; gap:6px; align-items:center; }
+  .who button { display:flex; align-items:center; gap:6px; max-width:52vw; }
+  .who button span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .menu { position:absolute; right:0; top:60px; width:min(320px, 92vw); background:var(--card); border:1px solid var(--line); border-radius:12px;
+          box-shadow:var(--shadow-pop); padding:6px; z-index:20; }
+  .menu .mrow { padding:9px 10px; font-size:14px; display:flex; justify-content:space-between; align-items:center; gap:10px; border-radius:8px; }
+  .menu .mrow small { color:var(--muted); display:block; font-size:12px; overflow-wrap:anywhere; }
+  .menu hr { border:0; border-top:1px solid var(--line); margin:4px 0; }
+  .menu button.link { padding:9px 10px; width:100%; text-align:left; color:var(--fg); border-radius:8px; }
+  .menu button.link:hover { background:var(--bg); }
+
+  /* notices */
+  .notice { border:1px solid var(--line); background:var(--card); border-radius:10px; padding:10px 14px; font-size:14px; margin:0 0 16px;
+            display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; }
   .notice.warn { border-color:color-mix(in srgb, var(--warn) 45%, var(--line)); }
-  form.add { display:grid; grid-template-columns:1fr 92px 130px auto auto; gap:8px; align-items:center; margin:0 0 22px; }
+  .notice .spin { display:inline-block; width:12px; height:12px; border:2px solid var(--line-strong); border-top-color:var(--accent); border-radius:50%;
+                  animation:spin 1s linear infinite; vertical-align:-2px; margin-right:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* add form */
+  form.add { display:grid; grid-template-columns:1fr 92px 130px auto auto; gap:8px; align-items:center; margin:0 0 14px; }
   form.add label.chk { font-size:13px; color:var(--muted); white-space:nowrap; display:flex; align-items:center; gap:6px; }
+  .hint { color:var(--muted); font-size:13px; margin:-6px 0 16px; min-height:1em; }
+  .hint.bad { color:var(--bad); }
+
+  /* toolbar */
+  .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 10px; }
+  .toolbar input[type=search] { flex:1 1 180px; padding:7px 10px; }
+  .toolbar select { width:auto; padding:7px 28px 7px 10px; font-size:13px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { font-size:12.5px; padding:4px 10px; border-radius:999px; border:1px solid var(--line-strong); background:var(--card); }
+  .chip.on { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+
+  /* items */
   .list { border-top:1px solid var(--line); }
-  .item { display:grid; grid-template-columns:60px 1fr 200px auto; gap:16px; align-items:center; padding:14px 0; border-bottom:1px solid var(--line); }
-  .item.paused { opacity:.55; }
+  .item { border-bottom:1px solid var(--line); }
+  .item .top { display:grid; grid-template-columns:60px 1fr 200px auto; gap:16px; align-items:center; padding:14px 0; cursor:pointer; }
+  .item.paused .top { opacity:.55; }
+  .item.flash { animation:flash 1.6s ease-out; }
+  @keyframes flash { 0%, 40% { background:var(--accent-soft); } 100% { background:transparent; } }
   .thumb { width:60px; height:60px; object-fit:cover; border-radius:8px; background:var(--line); display:block; }
   .name { font-weight:550; text-decoration:none; }
   .name:hover { text-decoration:underline; }
+  .name.guess { font-weight:500; color:var(--muted); }
   .meta { color:var(--muted); font-size:13px; margin-top:2px; overflow-wrap:anywhere; }
+  .badge { display:inline-block; font-size:11.5px; font-weight:600; padding:1px 7px; border-radius:999px; vertical-align:1px; }
+  .badge.sale { background:var(--ok-soft); color:var(--ok); }
+  .badge.hit { background:var(--accent-soft); color:var(--accent); }
+  .badge.out { background:var(--bad-soft); color:var(--bad); }
+  .badge.warn { background:var(--warn-soft); color:var(--warn); }
   .price { font-size:18px; font-weight:600; letter-spacing:-.01em; }
   .price .was { color:var(--muted); text-decoration:line-through; font-weight:400; font-size:13px; margin-left:6px; }
   .price.pending { color:var(--muted); font-weight:400; font-size:14px; }
   .ok { color:var(--ok); } .bad { color:var(--bad); } .warn { color:var(--warn); }
-  .actions { display:flex; gap:2px; }
+  .actions { display:flex; gap:2px; flex-wrap:wrap; justify-content:flex-end; }
+  .actions button { white-space:nowrap; font-size:13px; }
   .chart { position:relative; width:200px; height:44px; margin-top:4px; }
   .chart svg { display:block; overflow:visible; }
-  .chart .tip { position:absolute; pointer-events:none; background:var(--tip-bg); color:var(--tip-fg); font-size:11px; padding:3px 6px; border-radius:5px; white-space:nowrap; transform:translate(-50%,-130%); display:none; }
+  .chart .tip { position:absolute; pointer-events:none; background:var(--tip-bg); color:var(--tip-fg); font-size:11px; padding:3px 6px; border-radius:5px;
+                white-space:nowrap; transform:translate(-50%,-130%); display:none; z-index:2; }
+
+  /* expanded detail */
+  .detail { padding:0 0 16px 76px; display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .detail h4 { margin:0 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:600; }
+  .detail .big { grid-column:1 / -1; }
+  .detail .big .chart { width:100%; height:120px; }
+  .stats { display:flex; gap:6px 16px; flex-wrap:wrap; font-size:13px; color:var(--muted); margin:6px 0 0; }
+  .stats span { white-space:nowrap; }
+  .stats b { color:var(--fg); font-weight:600; }
+  table.hist { border-collapse:collapse; width:100%; font-size:13px; }
+  table.hist td { padding:3px 0; border-bottom:1px solid var(--line); color:var(--muted); }
+  table.hist td:first-child { color:var(--fg); }
+  table.hist td:last-child { text-align:right; }
+  .alist { font-size:13px; color:var(--muted); display:grid; gap:4px; }
+  .alist b { color:var(--fg); font-weight:550; }
+  .sizes { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .sizes button { font-size:12.5px; padding:3px 9px; border-radius:999px; }
+  .sizes button.out { text-decoration:line-through; opacity:.55; }
+  .sizes button.on { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+
+  /* edit form */
+  form.edit { grid-column:1 / -1; display:grid; grid-template-columns:120px 150px auto auto auto; gap:8px; align-items:center; }
+  form.edit .sizes { grid-column:1 / -1; margin:0; }
+  form.edit label.chk { font-size:13px; color:var(--muted); white-space:nowrap; display:flex; align-items:center; gap:6px; }
+
   .empty { color:var(--muted); text-align:center; padding:48px 0; }
+  .empty b { color:var(--fg); font-weight:550; display:block; margin-bottom:6px; }
   .foot { color:var(--muted); font-size:13px; margin-top:22px; }
-  .toast { position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); background:var(--tip-bg); color:var(--tip-fg); padding:9px 14px; border-radius:8px; font-size:14px; display:none; max-width:90vw; }
+  .toast { position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); background:var(--tip-bg); color:var(--tip-fg);
+           padding:9px 14px; border-radius:8px; font-size:14px; display:none; max-width:90vw; z-index:30; }
+  /* landing */
+  nav.top { display:flex; gap:4px; align-items:center; }
+  nav.top a { text-decoration:none; color:var(--muted); font-size:14px; padding:6px 10px; border-radius:8px; }
+  nav.top a:hover { color:var(--fg); background:var(--card); }
+  nav.top a.btn { color:var(--accent-ink); background:var(--accent); font-weight:550; }
+  .hero { display:grid; grid-template-columns:1.15fr 1fr; gap:36px; align-items:center; padding:36px 0 28px; }
+  .eyebrow { color:var(--accent); font-size:13px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; margin-bottom:12px; }
+  .hero h1 { font-size:clamp(34px, 5.5vw, 54px); line-height:1.05; letter-spacing:-.025em; margin:0 0 16px; }
+  .hero .lede { font-size:17px; color:var(--muted); margin:0 0 22px; max-width:520px; }
+  .cta { display:flex; gap:10px; flex-wrap:wrap; }
+  .cta a { text-decoration:none; font-size:15px; padding:11px 18px; border-radius:10px; border:1px solid var(--line-strong); background:var(--card); }
+  .cta a.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:550; }
+  .proof { margin-top:18px; color:var(--muted); font-size:13px; }
+  .demo { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow-pop); display:grid; gap:14px; }
+  .demo .ditem { display:grid; grid-template-columns:56px 1fr; gap:14px; align-items:center; }
+  .demo .ditem .side { grid-column:1 / -1; }
+  .demo .thumb { background:linear-gradient(135deg, var(--accent-soft), var(--accent)); width:56px; height:56px; }
+  .demo .chart { width:100%; height:64px; }
+  .demo .msg { background:var(--bg); border:1px solid var(--line); border-radius:12px 12px 12px 4px; padding:10px 12px; font-size:13.5px; line-height:1.45; }
+  .demo .msg small { display:block; color:var(--muted); font-size:11.5px; margin-top:4px; }
+  .demo .from { display:flex; gap:8px; align-items:center; font-size:12px; color:var(--muted); }
+  .demo .from i { width:18px; height:18px; border-radius:50%; background:#2aabee; display:inline-block; }
+  .land-section { padding:34px 0 0; }
+  .land-section h2 { font-size:24px; letter-spacing:-.015em; margin:0 0 6px; }
+  .land-section > p { color:var(--muted); margin:0 0 20px; max-width:600px; }
+  .steps.how { max-width:none; margin:0; grid-template-columns:repeat(3, 1fr); gap:14px; }
+  .steps.how div { display:block; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; color:var(--fg); }
+  .steps.how b { display:inline-flex; width:26px; height:26px; border-radius:50%; background:var(--accent-soft); color:var(--accent); align-items:center; justify-content:center; margin-bottom:10px; }
+  .steps.how span { display:block; color:var(--muted); }
+  .steps.how strong { display:block; font-weight:600; margin-bottom:4px; }
+  .grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; }
+  .feat { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .feat .ic { font-size:22px; margin-bottom:8px; }
+  .feat b { display:block; font-weight:600; margin-bottom:4px; }
+  .feat span { color:var(--muted); font-size:14px; }
+  .stores.land { max-width:none; margin:0; text-align:left; }
+  .faq details { border-top:1px solid var(--line); padding:12px 0; }
+  .faq details:last-child { border-bottom:1px solid var(--line); }
+  .faq summary { cursor:pointer; font-weight:550; list-style:none; display:flex; justify-content:space-between; gap:12px; }
+  .faq summary::-webkit-details-marker { display:none; }
+  .faq summary::after { content:"+"; color:var(--muted); }
+  .faq details[open] summary::after { content:"–"; }
+  .faq details p { color:var(--muted); margin:8px 0 0; font-size:14px; }
+  .land-foot { color:var(--muted); font-size:13px; padding:36px 0 0; display:flex; gap:14px; flex-wrap:wrap; justify-content:space-between; }
+  .signin.inhero { margin:0; }
+
+  /* dashboard strip + tabs + activity */
+  .stats-strip { display:grid; grid-template-columns:repeat(6, 1fr); gap:8px; margin:0 0 14px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; cursor:pointer; text-align:left; font:inherit; }
+  .stat:hover { border-color:var(--line-strong); }
+  .stat.on { border-color:var(--accent); }
+  .stat small { display:block; color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; font-weight:600; }
+  .stat b { font-size:20px; font-weight:600; letter-spacing:-.01em; }
+  .stat b.ok { color:var(--ok); }
+  .tabs { display:flex; gap:2px; border-bottom:1px solid var(--line); margin:0 0 12px; }
+  .tabs button { border:0; background:none; border-radius:0; padding:8px 12px; color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .tabs button.on { color:var(--fg); border-bottom-color:var(--accent); font-weight:550; }
+  .act { display:flex; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  .act .ic { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex:none; background:var(--accent-soft); }
+  .act .ic.drop { background:var(--ok-soft); } .act .ic.stock { background:var(--warn-soft); }
+  .act .what { flex:1; min-width:0; } .act .what small { display:block; color:var(--muted); font-size:12.5px; }
+  .act .when { color:var(--muted); font-size:12.5px; white-space:nowrap; }
+  .act a { font-weight:550; text-decoration:none; } .act a:hover { text-decoration:underline; }
+
+  /* getting-started checklist */
+  .start { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin:0 0 14px; display:grid; gap:8px; }
+  .start .h { display:flex; justify-content:space-between; align-items:center; font-weight:600; }
+  .start .st { display:flex; gap:10px; align-items:center; font-size:14px; color:var(--muted); }
+  .start .st.done { text-decoration:line-through; opacity:.6; }
+  .start .st i { width:18px; height:18px; border-radius:50%; border:1.5px solid var(--line-strong); display:inline-flex; align-items:center; justify-content:center; font-style:normal; font-size:11px; flex:none; }
+  .start .st.done i { background:var(--ok); border-color:var(--ok); color:#fff; }
+
+  form.edit .quick { grid-column:1 / -1; display:flex; gap:6px; align-items:center; font-size:12.5px; color:var(--muted); flex-wrap:wrap; }
+  form.edit .quick button { font-size:12.5px; padding:3px 9px; border-radius:999px; }
+  kbd { font:11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; border:1px solid var(--line-strong); border-bottom-width:2px; border-radius:4px; padding:2px 5px; color:var(--muted); }
+  .menu select { width:auto; padding:4px 24px 4px 8px; font-size:13px; }
+  .menu .bm { display:inline-block; font-size:12.5px; padding:3px 9px; border:1px dashed var(--line-strong); border-radius:999px; color:var(--fg); text-decoration:none; cursor:grab; }
+  .toast button { margin-left:10px; background:none; border:1px solid var(--tip-fg); color:var(--tip-fg); padding:2px 8px; font-size:13px; }
+
+  @media (max-width:900px) { .stats-strip { grid-template-columns:repeat(3, 1fr); } .grid, .steps.how { grid-template-columns:1fr 1fr; } }
   @media (max-width:680px) {
+    .hero { grid-template-columns:1fr; gap:22px; padding-top:18px; }
+    .grid, .steps.how { grid-template-columns:1fr; }
+    nav.top a:not(.btn) { display:none; }
+    .stats-strip { grid-template-columns:1fr 1fr; }
     form.add { grid-template-columns:1fr 1fr; }
     form.add input[name=url] { grid-column:1 / -1; }
     form.add button { grid-column:2; }
-    .item { grid-template-columns:52px 1fr; }
+    .item .top { grid-template-columns:52px 1fr; }
     .item .side, .item .actions { grid-column:2; }
+    .item .actions { justify-content:flex-start; }
     .chart { width:100%; }
+    .detail { padding-left:0; grid-template-columns:1fr; }
+    form.edit { grid-template-columns:1fr 1fr; }
+    .menu { top:56px; }
   }
 </style>
+<script>try { var t = localStorage.getItem("pw_theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 </head>
 <body>
 <main>
   <header>
-    <a class="brand" href="./">price<span>watch</span></a>
-    <div class="who" id="who" hidden><span id="email"></span><button class="link" id="signout">sign out</button></div>
+    <a class="brand" href="./"><img src="./icon.svg" alt="">price<span>watch</span></a>
+    <nav class="top" id="nav" hidden><a href="#how">How it works</a><a href="#features">Features</a><a href="#faq">FAQ</a><a class="btn" href="#signin">Sign in</a></nav>
+    <div class="who" id="who" hidden>
+      <button id="acct" type="button" aria-haspopup="true" aria-expanded="false"><span id="email"></span> ▾</button>
+    </div>
+    <div class="menu" id="menu" hidden>
+      <div class="mrow"><div>Signed in<small id="menuEmail"></small></div></div>
+      <hr>
+      <div class="mrow" id="menuTg"></div>
+      <div class="mrow"><div>Items<small id="menuCount"></small></div></div>
+      <hr>
+      <div class="mrow"><div>Theme</div><select id="theme" aria-label="Theme"><option value="">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+      <div class="mrow"><div>Add from any store<small>Drag this to your bookmarks bar, then click it on a product page.</small></div><a class="bm" id="bookmarklet" href="#">+ pricewatch</a></div>
+      <button class="link" id="installApp" type="button" hidden>Install as an app</button>
+      <hr>
+      <button class="link" id="exportCsv" type="button">Export items (CSV)</button>
+      <button class="link" id="exportJson" type="button">Export everything (JSON)</button>
+      <hr>
+      <button class="link" id="deleteData" type="button">Delete my data…</button>
+      <button class="link" id="signout" type="button">Sign out</button>
+    </div>
   </header>
 
-  <section id="signin" class="signin card" hidden>
-    <h1>Track prices on clothes you want.</h1>
-    <p>Paste a product link. Get a message when it drops or your size is back.</p>
-    <button class="primary g" id="google">
+  <section id="landing" hidden>
+    <div class="hero">
+      <div>
+        <div class="eyebrow">Free · works with most stores · alerts on Telegram</div>
+        <h1>Buy it when the price is right.</h1>
+        <p class="lede">Paste a link to something you want. pricewatch watches the price and your size, and messages you the moment it drops, hits your target, or comes back in stock.</p>
+        <div class="cta"><a class="primary" href="#signin">Start tracking, it's free</a><a href="#how">See how it works</a></div>
+        <div class="proof">No app to install. No card. Delete everything with one tap.</div>
+      </div>
+      <div class="demo" aria-hidden="true">
+        <div class="ditem">
+          <div class="thumb"></div>
+          <div><span class="name">Nike Dunk Low Retro</span><div class="meta">Nike · size 10 · target $90 · checked 3m ago</div>
+            <div class="meta"><span class="badge sale">24% off</span> · <span class="ok">in stock</span> · low $95.00</div></div>
+          <div class="side"><div class="price">$95.00<span class="was">$125.00</span></div>
+            <div class="chart"><svg viewBox="0 0 320 64" width="100%" height="64" preserveAspectRatio="none"><line x1="0" x2="320" y1="50" y2="50" stroke="var(--line-strong)" stroke-dasharray="3 3"/><polyline points="4,8 60,8 116,8 172,28 228,28 284,44 316,44" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/><circle cx="316" cy="44" r="4" fill="var(--accent)" stroke="var(--card)" stroke-width="2"/></svg></div></div>
+        </div>
+        <div><div class="from"><i></i>Telegram · just now</div>
+          <div class="msg">📉 <b>Nike Dunk Low Retro</b> dropped to <b>$95.00</b> (was $125.00, 24% off). Size 10 is in stock.<small>pricewatch</small></div></div>
+      </div>
+    </div>
+
+  <section id="signin" class="signin card inhero">
+    <h1>Sign in to start</h1>
+    <p>Google or an email link. No password to remember.</p>
+    <button class="primary g" id="google" type="button">
       <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.4 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.7 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.7-2.1 15.6-5.7l-7.7-6c-2.1 1.4-4.8 2.3-7.9 2.3-6.3 0-11.6-3.9-13.5-9.3l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
       Continue with Google
     </button>
@@ -100,23 +322,85 @@
     </form>
   </section>
 
+    <section class="land-section" id="how">
+      <h2>How it works</h2>
+      <p>Three steps, then forget about it.</p>
+      <div class="steps how" id="steps">
+        <div><b>1</b><strong>Paste a link</strong><span>Any product page. Add your size and, if you like, a target price.</span></div>
+        <div><b>2</b><strong>Connect Telegram</strong><span>One tap, once. That's where alerts arrive, instantly and free.</span></div>
+        <div><b>3</b><strong>Get the message</strong><span>Price drop, target hit, or your size back in stock. Then go buy it.</span></div>
+      </div>
+    </section>
+
+    <section class="land-section" id="features">
+      <h2>Built for clothes, not just prices</h2>
+      <p>Most trackers watch a number. This one knows about sizes, sales and sold-out pages.</p>
+      <div class="grid">
+        <div class="feat"><div class="ic">📉</div><b>Real sale detection</b><span>Sees the struck-through price and tells you the real % off, not just that a number changed.</span></div>
+        <div class="feat"><div class="ic">👕</div><b>Your size, specifically</b><span>Pick from the sizes on the page. Get a restock alert when yours is back, not when someone else's is.</span></div>
+        <div class="feat"><div class="ic">🎯</div><b>Target price</b><span>Set one and only hear when it's hit. Skip it and you're told about any real drop.</span></div>
+        <div class="feat"><div class="ic">📈</div><b>Full history</b><span>A price chart, the low and high, every check and every alert, per item.</span></div>
+        <div class="feat"><div class="ic">⚡</div><b>Check now</b><span>New items get their first price within about 15 minutes. Jump the queue whenever you want.</span></div>
+        <div class="feat"><div class="ic">🔒</div><b>Yours alone</b><span>Your items are visible only to you, enforced in the database. Export or delete everything anytime.</span></div>
+      </div>
+    </section>
+
+    <section class="land-section" id="stores-section">
+      <h2>Stores</h2>
+      <div class="stores land" id="stores">
+        Works best with <span>Nike</span> <span>Zara</span> <span>Uniqlo</span> <span>SSENSE</span> <span>END.</span> <span>Grailed</span> <span>Amazon</span> <span>Lululemon</span>
+        and most other stores with a normal product page.
+      </div>
+    </section>
+
+    <section class="land-section faq" id="faq">
+      <h2>Questions</h2>
+      <details><summary>Is it really free?</summary><p>Yes. It runs on free tiers end to end. The only limit is 100 tracked items per account.</p></details>
+      <details><summary>How often are prices checked?</summary><p>Every item is re-checked about every 6 hours. New items and "check now" requests run on the next pass, within about 15 minutes.</p></details>
+      <details><summary>Why Telegram?</summary><p>It's free, instant, and doesn't need your phone number. You connect once from inside the app; alerts go to your own chat.</p></details>
+      <details><summary>What if a store blocks bots?</summary><p>The tracker falls back to a real browser, and if a store still says no you'll see a plain-language note on the item instead of a cryptic error. It keeps trying.</p></details>
+      <details><summary>Does it work on my phone?</summary><p>Yes. Add it to your home screen and it behaves like an app, and you can share a product link straight to it from the store's app or browser.</p></details>
+      <details><summary>Can I get my data out, or delete it?</summary><p>Both, from the account menu: export as CSV or JSON, or delete every item, price and alert along with your Telegram link.</p></details>
+    </section>
+
+    <footer class="land-foot">
+      <span>pricewatch · open source · <a href="https://github.com/Sidlmao/pricewatch" target="_blank" rel="noopener">GitHub</a></span>
+      <span><a href="#signin">Sign in</a></span>
+    </footer>
+  </section>
+
   <section id="app" hidden>
-    <div id="tg" class="notice warn" hidden>
-      <span>Alerts go to Telegram. Connect it once so you actually get them.</span>
-      <a id="tglink" href="#" target="_blank" rel="noopener"><button class="primary" type="button">Connect Telegram</button></a>
-    </div>
+    <div id="tg" class="notice warn" hidden></div>
     <form class="add" id="add">
-      <input type="url" name="url" placeholder="Paste a product link (Nike, Zara, Uniqlo, SSENSE, END., Grailed, Amazon, ...)" required>
-      <input type="text" name="size" placeholder="Size">
-      <input type="number" name="target" placeholder="Target price" step="0.01" min="0">
+      <input type="url" name="url" placeholder="Paste a product link (Nike, Zara, Uniqlo, SSENSE, END., Grailed, Amazon, ...)" required autocomplete="off" inputmode="url">
+      <input type="text" name="size" placeholder="Size" autocomplete="off">
+      <input type="number" name="target" placeholder="Target price" step="0.01" min="0" inputmode="decimal">
       <label class="chk"><input type="checkbox" name="restock"> restock alert</label>
       <button class="primary" type="submit">Track</button>
     </form>
+    <div class="hint" id="hint"></div>
+    <div class="start" id="start" hidden></div>
+    <div class="stats-strip" id="stats" hidden></div>
+    <div class="tabs" id="tabs" hidden><button type="button" data-tab="items" class="on">Items</button><button type="button" data-tab="activity">Activity</button></div>
+    <div class="toolbar" id="toolbar" hidden>
+      <input type="search" id="q" placeholder="Search your items" autocomplete="off">
+      <select id="sort" aria-label="Sort">
+        <option value="new">Newest first</option>
+        <option value="price">Price: low to high</option>
+        <option value="drop">Biggest drop</option>
+        <option value="alert">Recent alerts</option>
+        <option value="name">Name</option>
+        <option value="store">Store</option>
+      </select>
+      <div class="chips" id="filters"></div>
+      <button type="button" class="small" id="checkAll" title="Queue a fresh check of every active item">Check all</button>
+    </div>
     <div class="list" id="list"></div>
+    <div class="list" id="activity" hidden></div>
     <p class="foot" id="foot"></p>
   </section>
 </main>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status"></div>
 
 <script src="./config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
@@ -124,134 +408,536 @@
 (function () {
   const C = window.PW_CONFIG || {};
   const $ = (s) => document.querySelector(s);
-  const el = { signin: $("#signin"), app: $("#app"), who: $("#who"), email: $("#email"), list: $("#list"),
-               tg: $("#tg"), tglink: $("#tglink"), foot: $("#foot"), toast: $("#toast") };
+  const el = { signin: $("#signin"), landing: $("#landing"), nav: $("#nav"), app: $("#app"), who: $("#who"), email: $("#email"),
+               list: $("#list"), tg: $("#tg"), foot: $("#foot"), toast: $("#toast"), hint: $("#hint"), toolbar: $("#toolbar"),
+               q: $("#q"), sort: $("#sort"), filters: $("#filters"), menu: $("#menu"), acct: $("#acct"),
+               stats: $("#stats"), tabs: $("#tabs"), activity: $("#activity"), start: $("#start"), checkAll: $("#checkAll") };
+  const MAX = C.maxItems || 100;
+  const CRON = (C.cronMinutes && C.cronMinutes.length ? C.cronMinutes : [7, 22, 37, 52]).slice().sort((a, b) => a - b);
+
   if (!C.supabaseUrl || !C.supabaseAnonKey) {
-    el.signin.hidden = false; $("#google").disabled = true;
+    el.landing.hidden = el.nav.hidden = false; $("#google").disabled = true;
     el.signin.querySelector("p").textContent = "Not configured yet: set SUPABASE_URL and SUPABASE_ANON_KEY (see README).";
     return;
   }
   const sb = window.supabase.createClient(C.supabaseUrl, C.supabaseAnonKey);
   const here = location.origin + location.pathname;
-  let user = null, profile = null;
+  let user = null, profile = null, items = [], loaded = false, renderSeq = 0;
+  const ui = { open: new Set(), editing: null, sort: "new", filter: "all", q: "", tab: "items" };
+  try { ui.sort = localStorage.getItem("pw_sort") || "new"; } catch (e) {}
 
-  const toast = (m) => { el.toast.textContent = m; el.toast.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => el.toast.style.display = "none", 3200); };
+  // ---- theme ----------------------------------------------------------------
+  const themeSel = $("#theme");
+  try { themeSel.value = localStorage.getItem("pw_theme") || ""; } catch (e) {}
+  themeSel.onchange = () => { const t = themeSel.value; if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+    try { t ? localStorage.setItem("pw_theme", t) : localStorage.removeItem("pw_theme"); } catch (e) {} };
+
+  // ---- a link handed to us: share sheet (manifest share_target), bookmarklet, or ?add= ----------
+  let pendingAdd = null;
+  (function linkFromUrl() {
+    const q = new URLSearchParams(location.search);
+    const m = [q.get("add"), q.get("url"), q.get("text"), q.get("title")].filter(Boolean).join(" ").match(/https?:\/\/\S+/);
+    if (m) { pendingAdd = m[0]; try { sessionStorage.setItem("pw_add", pendingAdd); } catch (e) {} }
+    else { try { pendingAdd = sessionStorage.getItem("pw_add"); } catch (e) {} }
+    if ([...q.keys()].length) history.replaceState(null, "", location.origin + location.pathname + location.hash);
+  })();
+  function applyPendingAdd() {
+    if (!pendingAdd) return; const f = $("#add"); f.url.value = pendingAdd; pendingAdd = null;
+    try { sessionStorage.removeItem("pw_add"); } catch (e) {}
+    f.url.dispatchEvent(new Event("input")); f.size.focus(); f.scrollIntoView({ block: "start" });
+    toast("Link pasted in. Add a size or a target price, then press Track.", 5000);
+  }
+
+  // ---- helpers ------------------------------------------------------------
+  const toast = (m, ms, action) => { el.toast.textContent = m; if (action) { const b = document.createElement("button"); b.type = "button"; b.textContent = action.label; b.onclick = () => { el.toast.style.display = "none"; action.run(); }; el.toast.appendChild(b); }
+    el.toast.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => el.toast.style.display = "none", ms || 3200); };
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const SYM = { USD:"$", EUR:"€", GBP:"£", JPY:"¥", CAD:"CA$", AUD:"A$" };
   const fmt = (v, cur) => v == null ? "" : (SYM[cur] ?? "") + (cur === "JPY" || cur === "KRW" ? Math.round(v).toLocaleString() : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) + (SYM[cur] ? "" : (cur ? " " + cur : ""));
   const ago = (iso) => { if (!iso) return "never"; const s = (Date.now() - new Date(iso)) / 1000; if (s < 60) return "just now"; if (s < 3600) return Math.floor(s/60) + "m ago"; if (s < 86400) return Math.floor(s/3600) + "h ago"; return Math.floor(s/86400) + "d ago"; };
+  const dateShort = (iso) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const dateTime = (iso) => new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const pct = (old, now) => old && now != null && old > now ? Math.round((old - now) / old * 100) : 0;
 
-  // ---- auth ----
+  // when the checker next runs (GitHub cron, minutes past the hour in UTC)
+  function nextRun(from) {
+    const d = new Date(from || Date.now()); d.setUTCSeconds(0, 0);
+    const m = d.getUTCMinutes(); const next = CRON.find((x) => x > m);
+    if (next == null) { d.setUTCHours(d.getUTCHours() + 1); d.setUTCMinutes(CRON[0]); } else d.setUTCMinutes(next);
+    return d;
+  }
+  function stepMs() { return CRON.length > 1 ? (CRON[1] - CRON[0]) * 60000 : 3600000; }
+  const inMin = () => Math.max(1, Math.round((nextRun() - Date.now()) / 60000));
+  const soon = () => `in ~${inMin()} min`;
+
+  // strip tracking params so the same product pasted twice is recognised and stores get a clean link
+  const TRACK = /^(utm_.*|fbclid|gclid|dclid|msclkid|mc_cid|mc_eid|ref|ref_|_ga|gbraid|wbraid|igshid|srsltid|ttclid|twclid|yclid|cmpid|campaign_id|affiliate|aff_id|clickid|click_id|_hsenc|_hsmi|mkt_tok|si)$/i;
+  function cleanUrl(raw) {
+    let u; try { u = new URL(raw.trim()); } catch (e) { return null; }
+    if (!/^https?:$/.test(u.protocol)) return null;
+    [...u.searchParams.keys()].forEach((k) => { if (TRACK.test(k)) u.searchParams.delete(k); });
+    u.hash = "";
+    if (/(^|\.)amazon\./.test(u.hostname)) {
+      const m = u.pathname.match(/\/(?:dp|gp\/product|gp\/aw\/d)\/([A-Z0-9]{10})/i);
+      if (m) { const keep = ["th", "psc"].map((k) => [k, u.searchParams.get(k)]).filter((x) => x[1]);
+               u.pathname = "/dp/" + m[1].toUpperCase(); u.search = ""; keep.forEach(([k, v]) => u.searchParams.set(k, v)); }
+    }
+    return u.toString();
+  }
+  const STORE_NAMES = { nike:"Nike", endclothing:"END.", ssense:"SSENSE", zara:"Zara", uniqlo:"Uniqlo", grailed:"Grailed", amazon:"Amazon" };
+  function storeName(it) {
+    let key = it.store; if (!key) { try { key = new URL(it.url).hostname.toLowerCase().replace(/^(www|shop|store|m|us|uk|en)\./, "").split(".")[0]; } catch (e) { key = ""; } }
+    return STORE_NAMES[key] || (key ? key.charAt(0).toUpperCase() + key.slice(1) : "");
+  }
+  // a readable placeholder name from the link, until the first check reads the real one
+  function nameFromUrl(url) {
+    try {
+      const segs = new URL(url).pathname.split("/").filter(Boolean).map((s) => decodeURIComponent(s).replace(/\.html?$/i, ""));
+      const cand = segs.filter((s) => /[a-z]/i.test(s) && /[-_]/.test(s)).sort((a, b) => b.length - a.length)[0] || segs.filter((s) => /[a-z]{3,}/i.test(s)).pop();
+      if (!cand) return null;
+      const words = cand.split(/[-_+]+/).filter((w) => w && !(/\d/.test(w) && /[a-z]/i.test(w)) && !/^\d{5,}$/.test(w) && !/^p\d+$/i.test(w));
+      const s = words.map((w) => w.length > 2 ? w.charAt(0).toUpperCase() + w.slice(1) : w.toUpperCase()).join(" ").trim();
+      return s.length > 2 ? s : null;
+    } catch (e) { return null; }
+  }
+  // same normalisation the checker uses, so the app can tell whether your size was found on the page
+  const ALIAS = { xxs:"xxs","xx-small":"xxs", xs:"xs","x-small":"xs", s:"s", small:"s", sm:"s", m:"m", medium:"m", med:"m", l:"l", large:"l", lg:"l",
+                  xl:"xl","x-large":"xl", xxl:"xxl","xx-large":"xxl","2xl":"xxl", xxxl:"xxxl","3xl":"xxxl" };
+  const normSize = (s) => { s = String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ").replace(/^(us|uk|eu|size) /, ""); return ALIAS[s] || s; };
+  const sizesOf = (it) => { try { const o = it.sizes_json ? JSON.parse(it.sizes_json) : null; return o && typeof o === "object" ? o : null; } catch (e) { return null; } };
+  const sizeMatch = (it) => { const sz = sizesOf(it); if (!it.size || !sz) return null; const want = normSize(it.size); return Object.keys(sz).find((k) => normSize(k) === want) ?? false; };
+  function failHint(err) {
+    const e = (err || "").toLowerCase();
+    if (/robots/.test(e)) return "This store's robots.txt asks bots to stay off this page.";
+    if (/40[13]|429|blocked|captcha|access denied|forbidden/.test(e)) return "The store is blocking automated checks right now. We'll keep trying.";
+    if (/404|410/.test(e)) return "That page is gone (404). The product may have been removed.";
+    if (/no price/.test(e)) return "Couldn't find a price on this page. Use the product page itself, not a search or category page.";
+    if (/timeout|timed out/.test(e)) return "The store was too slow to respond. We'll keep trying.";
+    return err || "";
+  }
+
+  // ---- auth ---------------------------------------------------------------
   $("#google").onclick = () => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: here } });
-  $("#magic").onsubmit = async (e) => { e.preventDefault(); const email = e.target.email.value.trim();
-    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: here } });
-    toast(error ? error.message : "Check your email for the sign-in link."); };
-  $("#signout").onclick = () => sb.auth.signOut();
-  sb.auth.onAuthStateChange((_ev, session) => { user = session?.user || null; render(); });
+  $("#magic").onsubmit = async (e) => { e.preventDefault(); const f = e.target, email = f.email.value.trim(); const b = f.querySelector("button"); b.disabled = true;
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: here } }); b.disabled = false;
+    toast(error ? error.message : "Check your email for the sign-in link. It's valid for a few minutes.", 6000); };
+  $("#signout").onclick = () => { closeMenu(); sb.auth.signOut(); };
+  sb.auth.onAuthStateChange((_ev, session) => { const u = session?.user || null; if ((u && u.id) === (user && user.id) && loaded) return; user = u; render(); });
+  (function authErrorFromUrl() {   // expired / already-used magic link lands here with #error=...
+    const h = new URLSearchParams(location.hash.replace(/^#/, ""));
+    if (h.get("error")) { toast((h.get("error_description") || h.get("error")).replace(/\+/g, " ") + ". Request a new link.", 8000); history.replaceState(null, "", here); }
+  })();
 
-  // ---- data ----
+  // ---- data ---------------------------------------------------------------
   async function loadProfile() {
     const { data } = await sb.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
     profile = data;
-    if (!profile) { const { data: p } = await sb.from("profiles").insert({ user_id: user.id, email: user.email }).select().maybeSingle(); profile = p; }
+    if (!profile) { await sb.from("profiles").insert({ user_id: user.id, email: user.email });
+      profile = (await sb.from("profiles").select("*").eq("user_id", user.id).maybeSingle()).data; }
   }
   async function loadItems() {
     const { data, error } = await sb.from("items")
-      .select("*, price_history(price, original_price, in_stock, checked_at), alerts(type, sent_at)")
+      .select("*, price_history(price, original_price, in_stock, checked_at), alerts(type, old_price, new_price, sent_at)")
       .order("created_at", { ascending: false })
-      .order("checked_at", { referencedTable: "price_history", ascending: true })
-      .order("sent_at", { referencedTable: "alerts", ascending: false });
-    if (error) { toast(error.message); return []; }
-    return data || [];
+      .order("checked_at", { referencedTable: "price_history", ascending: false }).limit(400, { referencedTable: "price_history" })
+      .order("sent_at", { referencedTable: "alerts", ascending: false }).limit(10, { referencedTable: "alerts" });
+    if (error) { toast(error.message); return items; }
+    return (data || []).map((it) => ({ ...it, price_history: (it.price_history || []).slice().reverse() }));
   }
 
-  async function render() {
-    el.signin.hidden = !!user; el.app.hidden = !user; el.who.hidden = !user;
-    if (!user) return;
-    el.email.textContent = user.email || "";
-    await loadProfile();
-    const linked = !!(profile && profile.telegram_chat_id);
-    el.tg.hidden = linked || !C.telegramBot;
-    el.tglink.href = `https://t.me/${C.telegramBot}?start=${user.id}`;
-    const items = await loadItems();
-    el.list.innerHTML = items.length ? items.map(row).join("") : `<div class="empty">Nothing tracked yet. Paste a product link above.</div>`;
-    items.forEach((it) => { const c = document.getElementById("chart-" + it.id); if (c) spark(c, it); });
-    el.foot.textContent = `Prices are checked about every ${C.checkIntervalHours || 6} hours; new items within the hour. ` +
-      (linked ? "Alerts go to your Telegram." : "Connect Telegram above to receive alerts.");
+  async function render(quiet) {
+    const seq = ++renderSeq; render.at = Date.now();
+    el.landing.hidden = el.nav.hidden = !!user; el.app.hidden = !user; el.who.hidden = !user;
+    if (!user) { closeMenu(); loaded = false; return; }
+    el.email.textContent = user.email || "account"; $("#menuEmail").textContent = user.email || "";
+    if (!loaded && !quiet) el.list.innerHTML = `<div class="empty">Loading…</div>`;
+    await loadProfile(); if (seq !== renderSeq) return;
+    items = await loadItems(); if (seq !== renderSeq) return;
+    loaded = true;
+    renderTelegram();
+    draw();
+    el.foot.innerHTML = `New items and "check now" run <span class="next">${soon()}</span>. After that, every item is re-checked about every ${C.checkIntervalHours || 6} hours.
+      <br>Shortcuts: <kbd>n</kbd> new item · <kbd>/</kbd> search · <kbd>Esc</kbd> close`;
+    applyPendingAdd();
   }
+
+  // ---- telegram notice ------------------------------------------------------
+  const tgWaitKey = "pw_tg_wait";
+  const tgWaiting = () => { try { const t = Number(localStorage.getItem(tgWaitKey) || 0); return t && Date.now() - t < 45 * 60000 ? t : 0; } catch (e) { return 0; } };
+  function renderTelegram() {
+    const linked = !!(profile && profile.telegram_chat_id);
+    const link = `https://t.me/${C.telegramBot}?start=${user.id}`;
+    $("#menuTg").innerHTML = !C.telegramBot ? `<div>Telegram<small>not set up on this deployment</small></div>`
+      : linked ? `<div>Telegram<small>connected${profile.telegram_name ? " as " + esc(profile.telegram_name) : ""}</small></div><button class="link small" data-tg="off">disconnect</button>`
+      : `<div>Telegram<small>not connected. No alerts yet.</small></div><a href="${link}" target="_blank" rel="noopener"><button class="small" type="button" data-tg="on">Connect</button></a>`;
+    if (linked || !C.telegramBot) { el.tg.hidden = true; if (linked) try { localStorage.removeItem(tgWaitKey); } catch (e) {} return; }
+    el.tg.hidden = false;
+    if (tgWaiting()) {
+      el.tg.innerHTML = `<span><span class="spin"></span>Waiting for Telegram. Press <b>Start</b> in the bot chat if you haven't. The link is confirmed on the next check run (${soon()}); this page updates itself.</span>
+        <span><a href="${link}" target="_blank" rel="noopener"><button class="small" type="button" data-tg="on">Open Telegram again</button></a> <button class="link small" data-tg="cancel">cancel</button></span>`;
+      pollTelegram();
+    } else {
+      el.tg.innerHTML = `<span>Alerts go to Telegram. Connect it once so you actually get them.</span>
+        <a href="${link}" target="_blank" rel="noopener"><button class="primary" type="button" data-tg="on">Connect Telegram</button></a>`;
+    }
+  }
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-tg]"); if (!b) return;
+    if (b.dataset.tg === "on") { try { localStorage.setItem(tgWaitKey, String(Date.now())); } catch (x) {} setTimeout(renderTelegram, 300); closeMenu(); }
+    if (b.dataset.tg === "cancel") { try { localStorage.removeItem(tgWaitKey); } catch (x) {} renderTelegram(); }
+    if (b.dataset.tg === "off") { if (!confirm("Disconnect Telegram? You'll stop receiving alerts until you connect again.")) return;
+      const { error } = await sb.from("profiles").update({ telegram_chat_id: null, telegram_name: null }).eq("user_id", user.id);
+      if (error) return toast(error.message); closeMenu(); toast("Telegram disconnected."); render(true); }
+  });
+  let tgTimer = null;
+  function pollTelegram() {
+    if (tgTimer) return;
+    tgTimer = setInterval(async () => {
+      if (!user || !tgWaiting()) { clearInterval(tgTimer); tgTimer = null; if (user) renderTelegram(); return; }
+      const { data } = await sb.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
+      if (data && data.telegram_chat_id) { profile = data; clearInterval(tgTimer); tgTimer = null; toast("Telegram connected. You'll get alerts there. ✅", 5000); renderTelegram(); }
+    }, 20000);
+  }
+
+  // ---- account menu -----------------------------------------------------------
+  const closeMenu = () => { el.menu.hidden = true; el.acct.setAttribute("aria-expanded", "false"); };
+  el.acct.onclick = (e) => { e.stopPropagation(); el.menu.hidden = !el.menu.hidden; el.acct.setAttribute("aria-expanded", String(!el.menu.hidden)); };
+  document.addEventListener("click", (e) => { if (!el.menu.hidden && !e.target.closest("#menu")) closeMenu(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeMenu(); if (ui.editing != null) { ui.editing = null; draw(); } } });
+  const download = (name, text, type) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name;
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); };
+  const csvCell = (v) => { v = v == null ? "" : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  const stamp = () => new Date().toISOString().slice(0, 10);
+  $("#exportCsv").onclick = () => {
+    closeMenu();
+    const head = ["name", "store", "url", "size", "target_price", "currency", "price", "original_price", "low", "high", "in_stock", "last_checked", "active", "added"];
+    const rows = items.map((it) => { const h = it.price_history.filter((x) => x.price != null), lg = h[h.length - 1], la = lastAny(it);
+      return [it.name || nameFromUrl(it.url), storeName(it), it.url, it.size, it.target_price, it.currency, lg && lg.price, lg && lg.original_price,
+              h.length ? Math.min(...h.map((x) => x.price)) : null, h.length ? Math.max(...h.map((x) => x.price)) : null,
+              la ? (la.in_stock === 1 ? "yes" : la.in_stock === 0 ? "no" : "") : "", la && la.checked_at, it.active ? "yes" : "no", it.created_at]; });
+    download(`pricewatch-${stamp()}.csv`, [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\n"), "text/csv");
+    toast(`Exported ${items.length} item(s).`);
+  };
+  $("#exportJson").onclick = () => {
+    closeMenu();
+    const out = { exported_at: new Date().toISOString(), items: items.map(({ user_id, ...it }) => it) };
+    download(`pricewatch-${stamp()}.json`, JSON.stringify(out, null, 2), "application/json");
+    toast(`Exported ${items.length} item(s) with history and alerts.`);
+  };
+  let installEvt = null;
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; $("#installApp").hidden = false; if (user && loaded) draw(); });
+  $("#installApp").onclick = async () => { closeMenu(); if (!installEvt) return; installEvt.prompt(); const r = await installEvt.userChoice; installEvt = null; $("#installApp").hidden = true; if (r && r.outcome === "accepted") toast("Installed. Look for pricewatch on your home screen."); draw(); };
+  const standalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  $("#bookmarklet").href = "javascript:location.href=" + JSON.stringify(here + "?add=") + "+encodeURIComponent(location.href)";
+  $("#bookmarklet").onclick = (e) => { e.preventDefault(); toast("Drag this button to your bookmarks bar. Then click it on any product page to track it here.", 6000); };
+  $("#deleteData").onclick = async () => {
+    closeMenu();
+    if (!confirm(`Delete everything? All ${items.length} tracked item(s), their price history and alerts, and your Telegram link will be removed. This can't be undone.`)) return;
+    const r1 = await sb.from("items").delete().eq("user_id", user.id); if (r1.error) return toast(r1.error.message);
+    const r2 = await sb.from("profiles").delete().eq("user_id", user.id); if (r2.error) return toast(r2.error.message);
+    try { localStorage.removeItem(tgWaitKey); } catch (e) {}
+    toast("Your data is deleted. Signing out.", 4000); setTimeout(() => sb.auth.signOut(), 1200);
+  };
+
+  // ---- list: filter / sort / draw ------------------------------------------------
+  const lastGood = (it) => { const h = it.price_history.filter((h) => h.price != null); return h[h.length - 1] || null; };
+  const lastAny = (it) => it.price_history[it.price_history.length - 1] || null;
+  const state = (it) => {   // one word for filters/badges
+    const lg = lastGood(it), la = lastAny(it);
+    return { sale: !!(lg && lg.original_price && lg.original_price > lg.price), hit: !!(lg && it.target_price != null && lg.price <= it.target_price),
+             out: !!(la && la.in_stock === 0), paused: !it.active, failing: !!it.fail_count, pending: !la };
+  };
+  function dropPct(it) { const h = it.price_history.filter((h) => h.price != null); if (!h.length) return 0; const last = h[h.length - 1];
+    return Math.max(pct(last.original_price, last.price), pct(Math.max(...h.map((x) => x.price)), last.price)); }
+  const FILTERS = [["all", "All"], ["hit", "At target"], ["sale", "On sale"], ["out", "Sold out"], ["failing", "Needs attention"], ["paused", "Paused"]];
+  function visible() {
+    const q = ui.q.trim().toLowerCase();
+    let v = items.filter((it) => (ui.filter === "all" || state(it)[ui.filter]) &&
+      (!q || [it.name, nameFromUrl(it.url), storeName(it), it.size, it.url].filter(Boolean).join(" ").toLowerCase().includes(q)));
+    const key = { new: (a, b) => b.created_at.localeCompare(a.created_at),
+                  price: (a, b) => ((lastGood(a) || {}).price ?? Infinity) - ((lastGood(b) || {}).price ?? Infinity),
+                  drop: (a, b) => dropPct(b) - dropPct(a),
+                  alert: (a, b) => ((b.alerts[0] || {}).sent_at || "").localeCompare((a.alerts[0] || {}).sent_at || ""),
+                  name: (a, b) => (a.name || nameFromUrl(a.url) || a.url).localeCompare(b.name || nameFromUrl(b.url) || b.url),
+                  store: (a, b) => storeName(a).localeCompare(storeName(b)) || (a.name || nameFromUrl(a.url) || a.url).localeCompare(b.name || nameFromUrl(b.url) || b.url) }[ui.sort] || (() => 0);
+    return v.sort(key);
+  }
+  function draw() {
+    $("#menuCount").textContent = `${items.length} of ${MAX} tracked`;
+    const atCap = items.length >= MAX;
+    $("#add button").disabled = atCap; el.hint.classList.toggle("bad", atCap);
+    el.hint.textContent = atCap ? `You're at the limit of ${MAX} items. Remove some to add more.` : "";
+    el.sort.value = ui.sort;
+    const counts = Object.fromEntries(FILTERS.map(([k]) => [k, k === "all" ? items.length : items.filter((it) => state(it)[k]).length]));
+    renderStats(counts); renderStart();
+    const nAlerts = items.reduce((n, it) => n + it.alerts.length, 0);
+    el.tabs.hidden = !items.length; el.tabs.querySelector("[data-tab=activity]").textContent = "Activity" + (nAlerts ? " " + nAlerts : "");
+    el.tabs.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === ui.tab));
+    el.activity.hidden = ui.tab !== "activity"; el.list.hidden = ui.tab === "activity";
+    el.toolbar.hidden = items.length < 2 || ui.tab === "activity";
+    el.checkAll.hidden = !items.some((it) => it.active && !it.check_requested);
+    if (ui.tab === "activity") { renderActivity(); return; }
+    el.filters.innerHTML = FILTERS.filter(([k]) => k === "all" || counts[k]).map(([k, label]) =>
+      `<button type="button" class="chip${ui.filter === k ? " on" : ""}" data-filter="${k}">${label}${k !== "all" ? " " + counts[k] : ""}</button>`).join("");
+    if (ui.filter !== "all" && !counts[ui.filter]) { ui.filter = "all"; return draw(); }
+    const v = visible();
+    el.list.innerHTML = !items.length ? `<div class="empty"><b>Nothing tracked yet.</b>Paste a product link above. Add your size if stock matters, and a target price if you have one in mind.</div>`
+      : !v.length ? `<div class="empty">No items match.</div>` : v.map(row).join("");
+    v.forEach((it) => { const c = document.getElementById("chart-" + it.id); if (c) spark(c, it, false);
+                        const b = document.getElementById("bigchart-" + it.id); if (b) spark(b, it, true); });
+  }
+  el.q.oninput = () => { ui.q = el.q.value; draw(); };
+  el.tabs.addEventListener("click", (e) => { const b = e.target.closest("[data-tab]"); if (b) { ui.tab = b.dataset.tab; draw(); } });
+  el.checkAll.onclick = async () => {
+    const due = items.filter((it) => it.active && !it.check_requested); if (!due.length) return;
+    el.checkAll.disabled = true;
+    const { error } = await sb.from("items").update({ check_requested: 1 }).eq("user_id", user.id).eq("active", 1); el.checkAll.disabled = false;
+    if (error) return toast(error.message);
+    due.forEach((it) => it.check_requested = 1); toast(`Queued ${due.length} item(s). They'll be checked ${soon()}.`, 4500); draw();
+  };
+
+  function savings() {   // per currency: what you'd save buying now vs. the first price seen
+    const by = {};
+    items.forEach((it) => { const h = it.price_history.filter((x) => x.price != null); if (h.length < 2) return;
+      const d = h[0].price - h[h.length - 1].price; if (d > 0) { const c = it.currency || ""; by[c] = (by[c] || 0) + d; } });
+    return Object.entries(by).sort((a, b) => b[1] - a[1]);
+  }
+  function renderStats(counts) {
+    el.stats.hidden = !items.length; if (!items.length) return;
+    const sv = savings(), tiles = [
+      ["all", "Tracked", items.length, ""], ["hit", "At target", counts.hit, counts.hit ? "ok" : ""], ["sale", "On sale", counts.sale, counts.sale ? "ok" : ""],
+      ["out", "Sold out", counts.out, ""], [null, "Cheaper than first seen", sv.length ? fmt(sv[0][1], sv[0][0]) + (sv.length > 1 ? " +" : "") : "—", sv.length ? "ok" : ""],
+      [null, "Next check", soon().replace("in ~", "~").replace(" min", "m"), ""]];
+    el.stats.innerHTML = tiles.map(([k, label, v, cls]) => `<${k ? "button type=\"button\"" : "div"} class="stat${k && ui.filter === k && ui.tab === "items" ? " on" : ""}"${k ? ` data-filter="${k}"` : ""}><small>${label}</small><b class="${cls}">${esc(v)}</b></${k ? "button" : "div"}>`).join("");
+  }
+  el.stats.addEventListener("click", (e) => { const b = e.target.closest("[data-filter]"); if (b) { ui.filter = b.dataset.filter; ui.tab = "items"; draw(); } });
+
+  const startKey = "pw_start_done";
+  function renderStart() {
+    let dismissed = false; try { dismissed = !!localStorage.getItem(startKey); } catch (e) {}
+    const linked = !!(profile && profile.telegram_chat_id), have = items.length > 0, inst = standalone();
+    el.start.hidden = dismissed || (have && linked); if (el.start.hidden) return;
+    const step = (done, text) => `<div class="st${done ? " done" : ""}"><i>${done ? "✓" : ""}</i><span>${text}</span></div>`;
+    el.start.innerHTML = `<div class="h"><span>Getting started</span><button class="link small" type="button" data-start="dismiss">dismiss</button></div>
+      ${step(have, "Track your first item: paste a product link above.")}
+      ${step(linked, C.telegramBot ? "Connect Telegram so alerts reach you." : "Alerts aren't set up on this deployment yet.")}
+      ${step(inst, inst ? "Installed as an app." : installEvt ? `Add it to your home screen: <button class="link small" type="button" data-start="install">install</button>` : "Optional: add it to your home screen (Share → Add to Home Screen on iPhone, or the install icon in the address bar) and share links straight to it.")}`;
+  }
+  el.start.addEventListener("click", (e) => { const b = e.target.closest("[data-start]"); if (!b) return;
+    if (b.dataset.start === "dismiss") { try { localStorage.setItem(startKey, "1"); } catch (x) {} el.start.hidden = true; }
+    if (b.dataset.start === "install") $("#installApp").click(); });
+
+  const ALERT_ICON = { price_drop: ["📉", "drop"], target_hit: ["🎯", "drop"], restock: ["📦", "stock"], needs_attention: ["⚠️", "stock"] };
+  const ALERT_TEXT = { price_drop: "price dropped", target_hit: "hit your target", restock: "back in stock", needs_attention: "needs attention" };
+  function renderActivity() {
+    const ev = []; items.forEach((it) => it.alerts.forEach((a) => ev.push({ it, a })));
+    ev.sort((x, y) => (y.a.sent_at || "").localeCompare(x.a.sent_at || ""));
+    el.activity.innerHTML = !ev.length ? `<div class="empty"><b>No alerts yet.</b>When a price drops, hits your target, or your size comes back, it shows up here and on Telegram.</div>`
+      : ev.slice(0, 200).map(({ it, a }) => { const [ic, cls] = ALERT_ICON[a.type] || ["🔔", ""], cur = it.currency;
+          const px = a.new_price != null ? (a.old_price != null ? fmt(a.old_price, cur) + " → " : "") + fmt(a.new_price, cur) : "";
+          return `<div class="act"><div class="ic ${cls}">${ic}</div><div class="what"><a href="#" data-open="${it.id}">${esc(it.name || nameFromUrl(it.url) || it.url)}</a> ${ALERT_TEXT[a.type] || esc(a.type.replace(/_/g, " "))}
+            <small>${[px, it.size && "size " + esc(it.size), esc(storeName(it))].filter(Boolean).join(" · ")}</small></div><div class="when">${dateTime(a.sent_at)}</div></div>`; }).join("");
+  }
+  el.activity.addEventListener("click", (e) => { const a = e.target.closest("[data-open]"); if (!a) return; e.preventDefault();
+    const id = Number(a.dataset.open); ui.tab = "items"; ui.filter = "all"; ui.q = ""; el.q.value = ""; ui.open.add(id); draw(); flashRow(id); });
+  el.sort.onchange = () => { ui.sort = el.sort.value; try { localStorage.setItem("pw_sort", ui.sort); } catch (e) {} draw(); };
+  el.filters.addEventListener("click", (e) => { const b = e.target.closest("[data-filter]"); if (b) { ui.filter = b.dataset.filter; draw(); } });
 
   function row(it) {
-    const hist = (it.price_history || []).filter((h) => h.price != null);
-    const last = hist[hist.length - 1];
-    const lastAny = (it.price_history || []).slice(-1)[0];
+    const hist = it.price_history.filter((h) => h.price != null), last = hist[hist.length - 1], la = lastAny(it), st = state(it), cur = it.currency;
     const low = hist.length ? Math.min(...hist.map((h) => h.price)) : null;
-    const cur = it.currency;
-    const stock = lastAny ? lastAny.in_stock : null;
-    const alerts = (it.alerts || []).slice(0, 2).map((a) => a.type.replace("_", " ") + " " + ago(a.sent_at));
-    const meta1 = [it.store, it.size && "size " + it.size, it.target_price != null && "target " + fmt(it.target_price, cur), it.notify_restock && "restock alerts",
-                   "checked " + ago(lastAny && lastAny.checked_at)].filter(Boolean).join(" · ");
-    const meta2 = [stock === 1 ? '<span class="ok">in stock</span>' : stock === 0 ? '<span class="bad">sold out</span>' : "",
-                   low != null && "low " + fmt(low, cur), ...alerts,
-                   it.fail_count ? `<span class="warn">failing (${it.fail_count}): ${esc(it.last_error || "")}</span>` : ""].filter(Boolean).join(" · ");
-    const price = last ? `<div class="price">${fmt(last.price, cur)}${last.original_price ? `<span class="was">${fmt(last.original_price, cur)}</span>` : ""}</div>`
-                       : `<div class="price pending">${it.fail_count ? "couldn't read price" : "waiting for first check"}</div>`;
-    return `<div class="item${it.active ? "" : " paused"}" data-id="${it.id}">
-      ${it.image_url ? `<img class="thumb" src="${esc(it.image_url)}" alt="" loading="lazy">` : `<div class="thumb"></div>`}
-      <div>
-        <a class="name" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.name || it.url)}</a>
-        <div class="meta">${esc(meta1)}</div>
-        <div class="meta">${meta2}</div>
+    const name = it.name || nameFromUrl(it.url), guess = !it.name;
+    const sm = sizeMatch(it), sz = sizesOf(it);
+    const meta1 = [storeName(it), it.size && "size " + it.size, it.target_price != null && "target " + fmt(it.target_price, cur), it.notify_restock && "restock alerts",
+                   it.check_requested ? "check queued " + soon() : la ? "checked " + ago(la.checked_at) : "first check " + soon()].filter(Boolean).join(" · ");
+    const badges = [st.hit && `<span class="badge hit">at target</span>`, st.sale && `<span class="badge sale">${pct(last.original_price, last.price)}% off</span>`,
+                    st.out && `<span class="badge out">sold out</span>`, !st.out && la && la.in_stock === 1 && `<span class="ok">in stock</span>`,
+                    sm === false && `<span class="badge warn">size "${esc(it.size)}" not on page</span>`].filter(Boolean);
+    const meta2 = [...badges, low != null && hist.length > 1 && "low " + fmt(low, cur),
+                   ...it.alerts.slice(0, 1).map((a) => a.type.replace("_", " ") + " " + ago(a.sent_at)),
+                   st.failing && `<span class="warn">${esc(failHint(it.last_error))}</span>`].filter(Boolean).join(" · ");
+    const price = last ? `<div class="price">${fmt(last.price, cur)}${last.original_price && last.original_price > last.price ? `<span class="was">${fmt(last.original_price, cur)}</span>` : ""}</div>`
+                       : `<div class="price pending">${st.failing ? "couldn't read the price" : it.active ? "waiting for first check" : "paused"}</div>`;
+    const open = ui.open.has(it.id), editing = ui.editing === it.id;
+    return `<div class="item${it.active ? "" : " paused"}${open ? " open" : ""}" data-id="${it.id}">
+      <div class="top">
+        ${it.image_url ? `<img class="thumb" src="${esc(it.image_url)}" alt="" loading="lazy">` : `<div class="thumb"></div>`}
+        <div>
+          <a class="name${guess ? " guess" : ""}" href="${esc(it.url)}" target="_blank" rel="noopener" title="Open the product page">${esc(name || it.url)}</a>
+          <div class="meta">${esc(meta1)}</div>
+          <div class="meta">${meta2}</div>
+        </div>
+        <div class="side">${price}<div class="chart" id="chart-${it.id}"></div></div>
+        <div class="actions">
+          ${it.active ? `<button class="link" data-act="check" ${it.check_requested ? "disabled" : ""}>${it.check_requested ? "queued" : "check now"}</button>` : ""}
+          <button class="link" data-act="edit">edit</button>
+          <button class="link" data-act="share" title="Share or copy the product link">share</button>
+          <button class="link" data-act="toggle">${it.active ? "pause" : "resume"}</button>
+          <button class="link danger" data-act="remove">remove</button>
+        </div>
       </div>
-      <div class="side">${price}<div class="chart" id="chart-${it.id}"></div></div>
-      <div class="actions">
-        <button class="link" data-act="toggle">${it.active ? "pause" : "resume"}</button>
-        <button class="link" data-act="remove">remove</button>
-      </div>
+      ${editing ? `<div class="detail">${editForm(it, sz)}</div>` : open ? detail(it, hist, cur, sz, sm) : ""}
+    </div>`;
+  }
+  function editForm(it, sz) {
+    const chips = sz ? `<div class="sizes">${Object.entries(sz).map(([k, ok]) => `<button type="button" data-size="${esc(k)}" class="${ok ? "" : "out"}${normSize(k) === normSize(it.size) ? " on" : ""}" title="${ok ? "in stock" : "sold out"}">${esc(k)}</button>`).join("")}</div>` : "";
+    const lg = lastGood(it), h = it.price_history.filter((x) => x.price != null), low = h.length ? Math.min(...h.map((x) => x.price)) : null, cur = it.currency;
+    const tq = (v, label) => `<button type="button" data-tq="${v}">${label} ${fmt(v, cur)}</button>`;
+    const quick = lg ? `<div class="quick">Quick target:${tq(Math.floor(lg.price * 0.9), "10% off")}${tq(Math.floor(lg.price * 0.8), "20% off")}${low != null && low < lg.price ? tq(low, "historic low") : ""}${lg.original_price && lg.original_price > lg.price ? tq(Math.floor(lg.original_price * 0.5), "half the original") : ""}</div>` : "";
+    return `<form class="edit" data-id="${it.id}">
+      <input type="text" name="size" placeholder="Size" value="${esc(it.size || "")}" autocomplete="off">
+      <input type="number" name="target" placeholder="Target price" step="0.01" min="0" value="${it.target_price ?? ""}" inputmode="decimal">
+      <label class="chk"><input type="checkbox" name="restock" ${it.notify_restock ? "checked" : ""}> restock alert</label>
+      <button class="primary" type="submit">Save</button><button type="button" data-act="cancel">Cancel</button>
+      ${quick}${chips}
+    </form>`;
+  }
+  function detail(it, hist, cur, sz, sm) {
+    const first = hist[0], last = hist[hist.length - 1];
+    const lo = hist.length ? Math.min(...hist.map((h) => h.price)) : null, hi = hist.length ? Math.max(...hist.map((h) => h.price)) : null;
+    const avg = hist.length ? hist.reduce((a, h) => a + h.price, 0) / hist.length : null;
+    const days = Math.max(1, Math.round((Date.now() - new Date(it.created_at)) / 86400000));
+    const rows = it.price_history.slice().reverse().slice(0, 30).map((h) =>
+      `<tr><td>${dateTime(h.checked_at)}</td><td>${h.price == null ? '<span class="warn">check failed</span>' : fmt(h.price, cur) + (h.original_price && h.original_price > h.price ? ` <s>${fmt(h.original_price, cur)}</s>` : "")}</td>
+           <td>${h.in_stock === 1 ? '<span class="ok">in stock</span>' : h.in_stock === 0 ? '<span class="bad">sold out</span>' : ""}</td></tr>`).join("");
+    const al = it.alerts.length ? it.alerts.map((a) => `<div><b>${esc(a.type.replace("_", " "))}</b> · ${dateTime(a.sent_at)}${a.new_price != null ? " · " + (a.old_price != null ? fmt(a.old_price, cur) + " → " : "") + fmt(a.new_price, cur) : ""}</div>`).join("")
+      : `<div>No alerts yet.${it.target_price == null ? " Without a target you get a message on any real drop." : ""}</div>`;
+    const sizes = sz ? `<h4 style="margin-top:12px">Sizes on the page</h4><div class="sizes">${Object.entries(sz).map(([k, ok]) => `<button type="button" data-pick="${esc(k)}" class="${ok ? "" : "out"}${sm === k ? " on" : ""}" title="${ok ? "in stock. Click to track this size." : "sold out. Click to track this size."}">${esc(k)}</button>`).join("")}</div>` : "";
+    return `<div class="detail">
+      <div class="big">${hist.length > 1 ? `<div class="chart" id="bigchart-${it.id}"></div>` : ""}
+        <div class="stats">${[hist.length && `first seen <b>${fmt(first.price, cur)}</b> ${dateShort(first.checked_at)}`, hist.length > 1 && `low <b>${fmt(lo, cur)}</b>`, hist.length > 1 && `high <b>${fmt(hi, cur)}</b>`,
+                 last && `now <b>${fmt(last.price, cur)}</b>`, hist.length > 1 && `avg <b>${fmt(avg, cur)}</b>`, hist.length > 1 && hi > last.price && `<b>${pct(hi, last.price)}%</b> below high`,
+                 `${it.price_history.length} check${it.price_history.length === 1 ? "" : "s"}`, `tracked <b>${days}</b> day${days === 1 ? "" : "s"}`].filter(Boolean).map((x) => `<span>${x}</span>`).join("")}</div>
+        ${sizes}</div>
+      <div><h4>History</h4>${rows ? `<table class="hist">${rows}</table>` : `<div class="alist">Nothing yet. First check ${soon()}.</div>`}</div>
+      <div><h4>Alerts</h4><div class="alist">${al}</div></div>
     </div>`;
   }
 
   // single-series sparkline: one hue, 2px line, hover tooltip, dashed target line
-  function spark(box, it) {
-    const pts = (it.price_history || []).filter((h) => h.price != null);
+  function spark(box, it, big) {
+    const pts = it.price_history.filter((h) => h.price != null);
     if (pts.length < 2) return;
-    const W = box.clientWidth || 200, H = 44, pad = 4;
+    const W = box.clientWidth || 200, H = big ? 120 : 44, pad = big ? 8 : 4;
     const vals = pts.map((p) => p.price), t = it.target_price;
     const lo = Math.min(...vals, t ?? Infinity), hi = Math.max(...vals, t ?? -Infinity), span = (hi - lo) || 1;
     const x = (i) => pad + (W - 2 * pad) * i / (pts.length - 1), y = (v) => pad + (H - 2 * pad) * (1 - (v - lo) / span);
     const d = pts.map((p, i) => `${x(i).toFixed(1)},${y(p.price).toFixed(1)}`).join(" ");
     box.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="price history">
       ${t != null ? `<line x1="0" x2="${W}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}" stroke="var(--line-strong)" stroke-dasharray="3 3"/>` : ""}
+      ${big ? `<text x="${W}" y="${y(hi).toFixed(1)}" dy="-3" text-anchor="end" font-size="10" fill="var(--muted)">${fmt(hi, it.currency)}</text><text x="${W}" y="${y(lo).toFixed(1)}" dy="11" text-anchor="end" font-size="10" fill="var(--muted)">${fmt(lo, it.currency)}</text>` : ""}
       <polyline points="${d}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
       <circle class="hov" r="4" fill="var(--accent)" stroke="var(--card)" stroke-width="2" cx="${x(pts.length-1).toFixed(1)}" cy="${y(vals[vals.length-1]).toFixed(1)}"/>
     </svg><div class="tip"></div>`;
     const svg = box.querySelector("svg"), dot = box.querySelector(".hov"), tip = box.querySelector(".tip");
     const show = (i) => { dot.setAttribute("cx", x(i).toFixed(1)); dot.setAttribute("cy", y(pts[i].price).toFixed(1));
-      tip.textContent = `${fmt(pts[i].price, it.currency)} · ${new Date(pts[i].checked_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+      tip.textContent = `${fmt(pts[i].price, it.currency)} · ${big ? dateTime(pts[i].checked_at) : dateShort(pts[i].checked_at)}`;
       tip.style.left = x(i) + "px"; tip.style.top = y(pts[i].price) + "px"; tip.style.display = "block"; };
-    svg.addEventListener("mousemove", (e) => { const r = svg.getBoundingClientRect(); show(Math.max(0, Math.min(pts.length - 1, Math.round((e.clientX - r.left - pad) / (W - 2 * pad) * (pts.length - 1))))); });
-    svg.addEventListener("mouseleave", () => { tip.style.display = "none"; show.last = null; dot.setAttribute("cx", x(pts.length-1).toFixed(1)); dot.setAttribute("cy", y(vals[vals.length-1]).toFixed(1)); });
+    const idx = (e) => { const r = svg.getBoundingClientRect(); return Math.max(0, Math.min(pts.length - 1, Math.round((e.clientX - r.left - pad) / (W - 2 * pad) * (pts.length - 1)))); };
+    svg.addEventListener("mousemove", (e) => show(idx(e)));
+    svg.addEventListener("touchmove", (e) => { show(idx(e.touches[0])); e.stopPropagation(); }, { passive: true });
+    svg.addEventListener("mouseleave", () => { tip.style.display = "none"; dot.setAttribute("cx", x(pts.length-1).toFixed(1)); dot.setAttribute("cy", y(vals[vals.length-1]).toFixed(1)); });
   }
 
-  // ---- actions ----
-  $("#add").onsubmit = async (e) => {
-    e.preventDefault(); const f = e.target;
-    const url = f.url.value.trim(); if (!/^https?:\/\//.test(url)) return toast("Paste a full link starting with http(s)://");
-    const rec = { user_id: user.id, url, size: f.size.value.trim() || null, target_price: f.target.value ? Number(f.target.value) : null,
-                  notify_restock: f.restock.checked ? 1 : 0, active: 1, created_at: new Date().toISOString() };
-    const btn = f.querySelector("button"); btn.disabled = true;
-    const { error } = await sb.from("items").insert(rec); btn.disabled = false;
-    if (error) return toast(error.message);
-    f.reset(); toast("Tracking. First price check runs within the hour."); render();
-  };
-  el.list.addEventListener("click", async (e) => {
-    const b = e.target.closest("button[data-act]"); if (!b) return;
-    const id = Number(b.closest(".item").dataset.id);
-    if (b.dataset.act === "remove") { if (!confirm("Remove this item and its history?")) return;
-      const { error } = await sb.from("items").delete().eq("id", id); if (error) return toast(error.message); }
-    if (b.dataset.act === "toggle") { const active = b.textContent === "resume" ? 1 : 0;
-      const { error } = await sb.from("items").update({ active }).eq("id", id); if (error) return toast(error.message); }
-    render();
+  // ---- actions --------------------------------------------------------------
+  const addForm = $("#add");
+  addForm.url.addEventListener("input", () => {
+    const u = cleanUrl(addForm.url.value); if (!addForm.url.value.trim()) { el.hint.textContent = ""; return; }
+    if (!u) { el.hint.textContent = "That doesn't look like a link. Copy the product page's address from your browser."; el.hint.classList.add("bad"); return; }
+    el.hint.classList.remove("bad");
+    const dupe = items.find((i) => i.url === u); const nm = nameFromUrl(u);
+    el.hint.textContent = dupe ? `Already tracking this${dupe.size ? " in size " + dupe.size : ""}. Add a different size, or edit the existing one.` : nm ? `${storeName({ url: u })}: ${nm}` : storeName({ url: u });
   });
+  addForm.url.addEventListener("paste", (e) => {
+    const text = (e.clipboardData || window.clipboardData || {}).getData ? (e.clipboardData || window.clipboardData).getData("text") : "";
+    const urls = [...new Set((text.match(/https?:\/\/[^\s<>"']+/g) || []).map(cleanUrl).filter(Boolean))];
+    if (urls.length < 2) return;
+    e.preventDefault(); bulkAdd(urls);
+  });
+  async function bulkAdd(urls) {
+    const fresh = urls.filter((u) => !items.some((i) => i.url === u)), room = Math.max(0, MAX - items.length);
+    if (!fresh.length) return toast("You're already tracking all of those links.");
+    if (!room) return toast(`You're at the limit of ${MAX} items.`);
+    if (!confirm(`Track ${fresh.length} links at once?${fresh.length > room ? ` Only the first ${room} fit under the ${MAX}-item limit.` : ""} You can add sizes and targets afterwards with "edit".`)) return;
+    const now = Date.now();
+    const recs = fresh.slice(0, room).map((url, i) => ({ user_id: user.id, url, size: null, target_price: null, notify_restock: 0, active: 1, check_requested: 1, created_at: new Date(now - i).toISOString() }));
+    const { data, error } = await sb.from("items").insert(recs).select();
+    if (error) return toast(/policy|row-level/i.test(error.message) ? `Couldn't add: you may be at the ${MAX}-item limit.` : error.message, 5000);
+    addForm.reset(); el.hint.textContent = ""; ui.sort = "new"; ui.filter = "all"; ui.q = ""; el.q.value = ""; ui.tab = "items";
+    (data || []).slice().reverse().forEach((d) => items.unshift({ ...d, price_history: [], alerts: [] }));
+    toast(`Tracking ${(data || []).length} new items. First checks ${soon()}.`, 5000); draw(); render(true);
+  }
+  addForm.onsubmit = async (e) => {
+    e.preventDefault(); const f = e.target;
+    const url = cleanUrl(f.url.value); if (!url) return toast("Paste a full link starting with http(s)://");
+    if (/^https?:\/\/[^/]*(google|bing|duckduckgo)\./i.test(url)) return toast("That's a search page. Open the product itself and copy its address.");
+    const size = f.size.value.trim() || null;
+    const dupe = items.find((i) => i.url === url && (i.size || "") === (size || ""));
+    if (dupe) { flashRow(dupe.id); return toast("You're already tracking this link" + (size ? " in that size" : "") + "."); }
+    if (items.length >= MAX) return toast(`You're at the limit of ${MAX} items.`);
+    const rec = { user_id: user.id, url, size, target_price: f.target.value ? Number(f.target.value) : null,
+                  notify_restock: f.restock.checked ? 1 : 0, active: 1, check_requested: 1, created_at: new Date().toISOString() };
+    const btn = f.querySelector("button"); btn.disabled = true;
+    const { data, error } = await sb.from("items").insert(rec).select().maybeSingle(); btn.disabled = false;
+    if (error) return toast(/policy|row-level/i.test(error.message) ? `Couldn't add: you may be at the ${MAX}-item limit.` : error.message, 5000);
+    f.reset(); el.hint.textContent = ""; ui.sort = "new"; ui.filter = "all"; ui.q = ""; el.q.value = "";
+    toast(`Tracking. First price check ${soon()}.`, 4500);
+    if (data) { items.unshift({ ...data, price_history: [], alerts: [] }); draw(); flashRow(data.id); }
+    render(true);
+  };
+  function flashRow(id) { const r = el.list.querySelector(`.item[data-id="${id}"]`); if (!r) return; r.classList.add("flash"); r.scrollIntoView({ block: "nearest", behavior: "smooth" }); setTimeout(() => r.classList.remove("flash"), 1700); }
+  const upd = async (id, patch) => { const { error } = await sb.from("items").update(patch).eq("id", id); if (error) toast(error.message); else Object.assign(items.find((i) => i.id === id) || {}, patch); return !error; };
+
+  el.list.addEventListener("click", async (e) => {
+    const itemEl = e.target.closest(".item"); if (!itemEl) return;
+    const id = Number(itemEl.dataset.id), it = items.find((i) => i.id === id);
+    const b = e.target.closest("button[data-act], button[data-pick], button[data-size], button[data-tq]");
+    if (b && b.dataset.tq != null) { const f = b.closest("form"); f.target.value = b.dataset.tq; f.target.focus(); return; }
+    if (b && b.dataset.size != null) { const f = b.closest("form"); f.size.value = b.dataset.size; f.querySelectorAll("[data-size]").forEach((x) => x.classList.toggle("on", x === b)); return; }
+    if (b && b.dataset.pick != null) { if (await upd(id, { size: b.dataset.pick, check_requested: 1 })) { toast(`Now tracking size ${b.dataset.pick}. Stock is re-checked ${soon()}.`); draw(); } return; }
+    if (b) {
+      const act = b.dataset.act;
+      if (act === "remove") { if (!confirm(`Remove "${it.name || nameFromUrl(it.url) || "this item"}" and its history?`)) return;
+        const { error } = await sb.from("items").delete().eq("id", id); if (error) return toast(error.message);
+        items = items.filter((i) => i.id !== id); ui.open.delete(id); toast("Removed."); draw(); return; }
+      if (act === "toggle") { const pausing = !!it.active; if (await upd(id, { active: pausing ? 0 : 1 })) { toast(pausing ? "Paused. No checks or alerts until you resume." : "Resumed."); draw(); } return; }
+      if (act === "check") { b.disabled = true; if (await upd(id, { check_requested: 1 })) { toast(`Queued. It'll be checked ${soon()}; this page refreshes on its own.`, 4500); draw(); } return; }
+      if (act === "edit") { ui.editing = ui.editing === id ? null : id; draw(); return; }
+      if (act === "share") { const title = it.name || nameFromUrl(it.url) || "pricewatch";
+        if (navigator.share) { try { await navigator.share({ title, url: it.url }); } catch (x) {} return; }
+        try { await navigator.clipboard.writeText(it.url); toast("Link copied."); } catch (x) { prompt("Copy the link:", it.url); } return; }
+      if (act === "cancel") { ui.editing = null; draw(); return; }
+    }
+    if (e.target.closest("a, form, .chart, .detail")) return;
+    if (ui.open.has(id)) ui.open.delete(id); else ui.open.add(id);
+    draw();
+  });
+  el.list.addEventListener("submit", async (e) => {
+    const f = e.target.closest("form.edit"); if (!f) return; e.preventDefault();
+    const id = Number(f.dataset.id), it = items.find((i) => i.id === id);
+    const size = f.size.value.trim() || null, target = f.target.value ? Number(f.target.value) : null, restock = f.restock.checked ? 1 : 0;
+    const patch = { size, target_price: target, notify_restock: restock };
+    if (size !== (it.size || null)) patch.check_requested = 1;   // stock for the new size gets refreshed
+    if (await upd(id, patch)) { ui.editing = null; toast("Saved."); draw(); }
+  });
+
+  // ---- keyboard shortcuts ---------------------------------------------------------------
+  document.addEventListener("keydown", (e) => {
+    if (!user || !loaded || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (/^(input|textarea|select)$/i.test((document.activeElement || {}).tagName || "")) return;
+    if (e.key === "/" && !el.toolbar.hidden) { e.preventDefault(); el.q.focus(); el.q.select(); }
+    else if (e.key === "n") { e.preventDefault(); addForm.url.focus(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  });
+
+  // ---- keep the page fresh: ~2.5 min after each cron run, quietly reload once ---------------
+  let seenRun = 0;
+  setInterval(() => {
+    if (!user || !loaded || document.visibilityState !== "visible") return;
+    const lastRun = nextRun().getTime() - stepMs(), since = Date.now() - lastRun;
+    if (since > 150000 && since < 600000 && lastRun !== seenRun) { seenRun = lastRun; render(true); }
+    el.foot.querySelectorAll(".next").forEach((n) => n.textContent = soon());
+  }, 30000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && user && loaded && Date.now() - (render.at || 0) > 120000) render(true); });
 })();
 </script>
 </body>
