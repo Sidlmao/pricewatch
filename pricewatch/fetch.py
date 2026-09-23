@@ -99,29 +99,17 @@ class Fetcher:
         return rp.can_fetch("*", url)
 
     # -- plain HTTP --------------------------------------------------------
-    # Bot managers answer a flagged request with one of these; a second try with a different UA and a
-    # clean cookie jar often gets through (Akamai judges each fingerprint separately).
-    RETRY_STATUSES = (400, 403, 429)
-    RETRIES = 2
-
     def get(self, url: str) -> str:
         if not self.allowed(url):
             raise RobotsDisallowed(f"robots.txt disallows {url}")
-        last = None
-        for attempt in range(1 + self.RETRIES):
-            self._throttle()
-            try:
-                r = self.session.get(url, headers=self._headers(), timeout=self.timeout, allow_redirects=True)
-            except requests.RequestException as e:
-                raise FetchError(f"request failed: {e}") from e
-            if r.status_code < 400:
-                return r.text
-            last = r.status_code
-            if r.status_code not in self.RETRY_STATUSES:
-                break
-            self.session.cookies.clear()
-            log.info("%s: HTTP %s, retrying with another user agent (%d/%d)", urlparse(url).netloc, last, attempt + 1, self.RETRIES)
-        raise FetchError(f"HTTP {last}")
+        self._throttle()
+        try:
+            r = self.session.get(url, headers=self._headers(), timeout=self.timeout, allow_redirects=True)
+        except requests.RequestException as e:
+            raise FetchError(f"request failed: {e}") from e
+        if r.status_code >= 400:
+            raise FetchError(f"HTTP {r.status_code}")
+        return r.text
 
     def get_json(self, url: str, referer: str = None):
         """Same politeness rules, but for JSON APIs."""
