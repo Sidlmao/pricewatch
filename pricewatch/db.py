@@ -227,7 +227,11 @@ def due_items(conn, hours: float):
     """Active items that were never checked, that the user asked to check now, or whose last check is
     more than `hours` ago. Requested and never-checked items come first so a big backlog can't starve them."""
     from datetime import timedelta
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).replace(microsecond=0).isoformat()
+    # Runs start a little after the scheduled minute and the previous check finished a little after its
+    # own, so "checked less than `hours` ago" would skip every other run. Allow up to 2 minutes of slack
+    # (never more than a quarter of the interval).
+    slack = min(120.0, hours * 3600 * 0.25)
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours) + timedelta(seconds=slack)).replace(microsecond=0).isoformat()
     return conn.execute("""
         SELECT i.* FROM items i
         LEFT JOIN (SELECT item_id, MAX(checked_at) AS last FROM price_history GROUP BY item_id) h ON h.item_id = i.id
