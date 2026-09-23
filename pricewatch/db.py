@@ -83,6 +83,14 @@ def now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def hours_since(iso: str) -> float:
+    """Hours between an ISO timestamp (as stored by now()) and the current time."""
+    t = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - t).total_seconds() / 3600
+
+
 # --- Postgres wrapper: makes psycopg look like the sqlite3 connection we already use ----
 
 _INSERT_RE = __import__("re").compile(r"\s*INSERT\s+INTO\s+(\w+)", __import__("re").I)

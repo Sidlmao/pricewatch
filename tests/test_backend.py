@@ -75,6 +75,22 @@ ck.check_item(conn, db.get_item(conn, a), F(), spy)
 ia = db.get_item(conn, a)
 check(ia["check_requested"] == 0 and ia["fail_count"] == 1, "failed check clears check_requested and counts")
 
+# needs-attention: once per streak, friendly text, and not again within the cooldown even after a success in between
+sent.clear()
+for _ in range(3): ck.check_item(conn, db.get_item(conn, a), F(), spy)
+check(len(sent) == 1 and "blocking automated checks" in sent[0] and "HTTP 403" not in sent[0].splitlines()[1], "3rd failure sends one plain-language needs-attention message")
+infos["https://x/a"] = ProductInfo(url="https://x/a", store="nike", name="A", price=5, currency="USD")
+ck.check_item(conn, db.get_item(conn, a), F(), spy)
+infos["https://x/a"] = ScrapeError("http: HTTP 403")
+for _ in range(3): ck.check_item(conn, db.get_item(conn, a), F(), spy)
+check(len(sent) == 1, "a new failure streak within the cooldown stays quiet")
+conn.execute("UPDATE alerts SET sent_at = ? WHERE item_id = ? AND type = 'needs_attention'", ("2020-01-01T00:00:00+00:00", a)); conn.commit()
+infos["https://x/a"] = ProductInfo(url="https://x/a", store="nike", name="A", price=5, currency="USD")
+ck.check_item(conn, db.get_item(conn, a), F(), spy)
+infos["https://x/a"] = ScrapeError("http: HTTP 403")
+for _ in range(3): ck.check_item(conn, db.get_item(conn, a), F(), spy)
+check(len(sent) == 2, "after the cooldown a new streak alerts again")
+
 # telegram link stores a name
 db.set_telegram(conn, "11111111-1111-1111-1111-111111111111", 42, "@sid")
 p = db.get_profile(conn, "11111111-1111-1111-1111-111111111111")

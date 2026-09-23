@@ -154,7 +154,9 @@ The workflow's `concurrency` group keeps runs from overlapping if one takes long
 - **No target**: message on any drop compared with the previous check, ignoring drops smaller
   than `MIN_DROP_PCT` (default 1%) so rounding noise doesn't page you.
 - **Restock** (per item): message when the size was sold out last check and is available now.
-- **Needs attention**: 3 failed checks in a row = one message, then silence until it works again.
+- **Needs attention**: 3 failed checks in a row = one message, then silence until it works again,
+  and at most one such message per item per `ATTENTION_COOLDOWN_HOURS` (default 24). Stores that
+  block most checks but let one through now and then would otherwise page you several times a day.
 
 Every alert is written to the `alerts` table, which is how it never sends the same one twice.
 

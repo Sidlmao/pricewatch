@@ -40,8 +40,25 @@ def build_message(kind: str, item, old_price, new_price, currency) -> str:
         line = f"{fmt(new_price, cur)}"
     else:  # needs_attention
         head = f"⚠️ Needs attention: {_label(item)}"
-        line = f"failed {config.FAIL_THRESHOLD} checks in a row: {item['last_error']}"
+        line = (f"{friendly_error(item['last_error'])} {config.FAIL_THRESHOLD} checks in a row failed; "
+                f"it keeps trying, and won't message about this again for {int(config.ATTENTION_COOLDOWN_HOURS)}h.")
     return f"{head}\n{line}\n{item['url']}"
+
+
+def friendly_error(err: Optional[str]) -> str:
+    """The same plain-language hints the web app shows, for the Telegram message."""
+    e = (err or "").lower()
+    if "robots" in e:
+        return "The store's robots.txt asks bots to stay off this page."
+    if any(k in e for k in ("403", "401", "429", "blocked", "captcha", "access denied", "forbidden")):
+        return "The store is blocking automated checks right now."
+    if "404" in e or "410" in e:
+        return "That page is gone (404); the product may have been removed."
+    if "no price" in e:
+        return "Couldn't find a price on this page (use the product page itself, not a search or category page)."
+    if "timeout" in e or "timed out" in e:
+        return "The store was too slow to respond."
+    return f"Last error: {err}." if err else "Checks are failing."
 
 
 class NullNotifier(Notifier):
@@ -137,7 +154,12 @@ def _handle_failure(conn, item, error: str, notifier: Notifier) -> List[str]:
     db.update_item_meta(conn, item["id"], fail_count=count, last_error=error[:300], check_requested=0)
     db.record_price(conn, item["id"], None, None)
     log.warning("%s: check failed (%d/%d): %s", _label(item), count, config.FAIL_THRESHOLD, error)
-    if count == config.FAIL_THRESHOLD:           # exactly once per failure streak
+    if count == config.FAIL_THRESHOLD:           # exactly once per failure streak ...
+        last = db.last_alert(conn, item["id"], "needs_attention")
+        if last and db.hours_since(last["sent_at"]) < config.ATTENTION_COOLDOWN_HOURS:   # ... and at most once per cooldown
+            log.info("%s: needs attention again, but the last message was %.1fh ago; staying quiet",
+                     _label(item), db.hours_since(last["sent_at"]))
+            return []
         item = db.get_item(conn, item["id"])
         notifier.send(build_message("needs_attention", item, None, None, None))
         db.record_alert(conn, item["id"], "needs_attention")

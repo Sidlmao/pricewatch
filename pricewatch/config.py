@@ -15,6 +15,9 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 NTFY_TOPIC = os.getenv("NTFY_TOPIC")
 NTFY_SERVER = os.getenv("NTFY_SERVER", "https://ntfy.sh")
 FAIL_THRESHOLD = int(os.getenv("FAIL_THRESHOLD", "3"))
+# After a "needs attention" message, stay quiet about that item for this long even if it flaps between
+# working and failing (stores like Lululemon block most checks and let one through now and then)
+ATTENTION_COOLDOWN_HOURS = float(os.getenv("ATTENTION_COOLDOWN_HOURS") or "24")
 # How often each item is re-checked. CHECK_INTERVAL_MINUTES (default 5) is the normal knob;
 # CHECK_INTERVAL_HOURS still works for older .env files and wins when set.
 CHECK_INTERVAL_MINUTES = float(os.getenv("CHECK_INTERVAL_MINUTES") or "5")
