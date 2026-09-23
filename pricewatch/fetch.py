@@ -2,6 +2,7 @@
 import logging
 import os
 import random
+import re
 import time
 import urllib.robotparser
 from urllib.parse import urlparse
@@ -10,15 +11,30 @@ import requests
 
 log = logging.getLogger("pricewatch.fetch")
 
+# Plain-HTTP requests present as Safari. Bot managers (Akamai and friends) compare the User-Agent with the
+# TLS fingerprint and client-hint headers; a Chrome or Firefox UA coming from Python's TLS stack is an
+# instant 403, while Safari sends no client hints and gets a lenient profile. The headless browser path
+# builds its own UA from the real Chromium version (see get_rendered).
 USER_AGENTS = [
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:129.0) Gecko/20100101 Firefox/129.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
 ]
+
+
+def client_hints(ua: str) -> dict:
+    """Chromium browsers always send these next to their User-Agent. A Chrome UA without them is an easy
+    bot tell (Akamai answers such requests with HTTP 400), so add the matching set."""
+    m = re.search(r"(?:Chrome|Chromium)/(\d+)", ua)
+    if not m:
+        return {}
+    v = m.group(1)
+    brand = "Microsoft Edge" if "Edg/" in ua else "Google Chrome"
+    platform = "macOS" if "Macintosh" in ua else "Linux" if "X11" in ua else "Windows"
+    return {"Sec-CH-UA": f'"Chromium";v="{v}", "Not;A=Brand";v="24", "{brand}";v="{v}"',
+            "Sec-CH-UA-Mobile": "?0", "Sec-CH-UA-Platform": f'"{platform}"'}
 
 
 class FetchError(Exception):
@@ -44,14 +60,17 @@ class Fetcher:
 
     # -- politeness -------------------------------------------------------
     def _headers(self):
-        return {
-            "User-Agent": random.choice(USER_AGENTS),
+        ua = random.choice(USER_AGENTS)
+        h = {
+            "User-Agent": ua,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Encoding": "gzip, deflate, br",   # "br" needs the brotli package (requirements.txt)
             "Upgrade-Insecure-Requests": "1",
             "Sec-Fetch-Dest": "document", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Site": "none",
         }
+        h.update(client_hints(ua))
+        return h
 
     def _throttle(self):
         wait = random.uniform(self.min_delay, self.max_delay)
@@ -127,7 +146,10 @@ class Fetcher:
                 self._browser = self._pw.chromium.launch(channel="chromium", headless=True)
             except PWError:
                 self._browser = self._pw.chromium.launch(headless=True)
-        ua = random.choice([u for u in USER_AGENTS if "Chrome" in u])
+        # Use the real Chromium major version: Playwright sends Sec-CH-UA from the actual browser, and a UA
+        # claiming a different version is an inconsistency bot managers reject outright.
+        major = (self._browser.version or "").split(".")[0] or "128"
+        ua = f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{major}.0.0.0 Safari/537.36"
         ctx = self._browser.new_context(user_agent=ua, locale="en-US", viewport={"width": 1366, "height": 900})
         ctx.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined});")
         # Don't waste bandwidth on images/fonts/media; we only need the DOM.

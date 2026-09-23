@@ -64,7 +64,7 @@ The rest of this README is about the full app.
 | Grailed | Grailed's listing JSON API (pages are Cloudflare-walled) | listing size |
 | Zara    | Headless Chromium, then JSON-LD variants           | per size      |
 | SSENSE  | Headless Chromium, then JSON-LD + size dropdown    | per size      |
-| Lululemon | Headless Chromium, then JSON-LD variants (generic path) | per size |
+| Lululemon | Plain HTTP with a Safari user agent, JSON-LD variants (generic path) | per size |
 | anything else | JSON-LD offers, then og:/product: meta tags, then embedded JSON, then Chromium | per size when the page lists variants |
 
 Sale prices are handled: the tracker records what you'd pay now and remembers the

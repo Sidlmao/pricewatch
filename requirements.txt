@@ -1,4 +1,5 @@
 requests>=2.32
+brotli>=1.1            # requests only decodes "br" responses when this is installed
 beautifulsoup4>=4.12
 lxml>=5.0
 playwright>=1.48

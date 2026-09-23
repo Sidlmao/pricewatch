@@ -12,6 +12,11 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+    inputs:
+      test_url:
+        description: "Scrape this one product link from GitHub's runners and print the result (no items touched)"
+        required: false
+        default: ""
 
 concurrency:
   group: pricewatch
@@ -52,15 +57,20 @@ jobs:
         run: echo "count=$(python check.py --due-count)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Playwright browsers
-        if: steps.due.outputs.count != '0'
+        if: steps.due.outputs.count != '0' || inputs.test_url != ''
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
-      - if: steps.due.outputs.count != '0'
+      - if: steps.due.outputs.count != '0' || inputs.test_url != ''
         run: playwright install --with-deps chromium
 
+      - name: Test one link
+        if: inputs.test_url != ''
+        run: python scrape.py "${{ inputs.test_url }}"
+
       - name: Check prices
+        if: inputs.test_url == ''
         # runs even with 0 due so Telegram "connect" links still get processed
         run: python check.py --due
 
