@@ -1,13 +1,16 @@
 name: price check
 
-# Runs every 15 minutes, but only scrapes items that are due: never checked, "check now" pressed
-# in the app, or last checked more than CHECK_INTERVAL_HOURS ago (default 6). So new items get
-# their first price within ~15 minutes and everything else is re-checked every 6 hours.
+# Meant to run every 5 minutes and scrape whatever is due: never checked, "check now" pressed in the
+# app, or last checked more than CHECK_INTERVAL_MINUTES ago (default 5, so every item, every run).
 # Runs with nothing due exit in ~20s. (Public repo: Actions minutes are free.)
+#
+# GitHub's schedule is best-effort and on this repo it has fired only every few hours regardless of
+# the cron line. For a real 5-minute cadence, setup_trigger.py installs a pg_cron job in Supabase that
+# calls workflow_dispatch every 5 minutes (see README "Making it actually run every 5 minutes").
 # Keep the minute list in sync with CRON_MINUTES in pages.yml; the app uses it to show "next check in".
 on:
   schedule:
-    - cron: "7,22,37,52 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -23,7 +26,8 @@ jobs:
     timeout-minutes: 30
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}       # Supabase; empty -> SQLite file in the repo
-      CHECK_INTERVAL_HOURS: ${{ vars.CHECK_INTERVAL_HOURS || '6' }}
+      CHECK_INTERVAL_MINUTES: ${{ vars.CHECK_INTERVAL_MINUTES || '5' }}
+      CHECK_INTERVAL_HOURS: ${{ vars.CHECK_INTERVAL_HOURS }}   # legacy override, normally empty
       MIN_DROP_PCT: ${{ vars.MIN_DROP_PCT || '1' }}
       APP_URL: ${{ vars.APP_URL }}
       TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}

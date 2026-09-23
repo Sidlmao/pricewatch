@@ -83,6 +83,7 @@ done
 "$GH" variable set APP_URL -b "https://$OWNER.github.io/$NAME/" -R "$FULL"      # the bot mentions it when someone messages it cold
 [ -n "${MAX_ITEMS_PER_USER:-}" ] && "$GH" variable set MAX_ITEMS_PER_USER -b "$MAX_ITEMS_PER_USER" -R "$FULL"
 [ -n "${MIN_DROP_PCT:-}" ] && "$GH" variable set MIN_DROP_PCT -b "$MIN_DROP_PCT" -R "$FULL"
+[ -n "${CHECK_INTERVAL_MINUTES:-}" ] && "$GH" variable set CHECK_INTERVAL_MINUTES -b "$CHECK_INTERVAL_MINUTES" -R "$FULL"
 
 # --- web app config (public values) --------------------------------------
 if [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_ANON_KEY:-}" ]; then
@@ -99,6 +100,12 @@ if [ -n "${DATABASE_URL:-}" ]; then
   echo "Applying Supabase row-level security ..."
   PY=.venv/bin/python; [ -x "$PY" ] || PY=python3
   "$PY" setup_supabase.py
+  if [ -n "${GITHUB_DISPATCH_TOKEN:-}" ]; then
+    echo "Installing the 5-minute trigger in Supabase ..."
+    GITHUB_REPO="$FULL" "$PY" setup_trigger.py || true
+  else
+    echo "NOTE: GITHUB_DISPATCH_TOKEN not in .env -> checks rely on GitHub's own cron, which runs late (see README)."
+  fi
 fi
 
 # --- permissions, Pages, first run ---------------------------------------

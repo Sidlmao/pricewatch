@@ -50,6 +50,13 @@
   button.link.danger:hover { color:var(--bad); }
   button:disabled { opacity:.5; cursor:default; }
   button.small { font-size:13px; padding:5px 9px; }
+  /* links that look like buttons (a <button> nested in an <a> is invalid HTML and Firefox won't follow the link) */
+  a.abtn { display:inline-block; font-size:14px; line-height:normal; padding:8px 12px; border:1px solid var(--line-strong); border-radius:8px;
+           background:var(--card); color:var(--fg); text-decoration:none; cursor:pointer; white-space:nowrap; }
+  a.abtn:hover { border-color:var(--fg); }
+  a.abtn.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:550; }
+  a.abtn.primary:hover { filter:brightness(1.08); }
+  a.abtn.small { font-size:13px; padding:5px 9px; }
   input[type=text], input[type=url], input[type=email], input[type=number], input[type=search], select {
     font:inherit; padding:9px 11px; border:1px solid var(--line-strong); border-radius:8px; background:var(--card); color:var(--fg); width:100%; }
   input:focus, select:focus { outline:2px solid var(--accent); outline-offset:1px; border-color:transparent; }
@@ -128,7 +135,7 @@
   .actions { display:flex; gap:2px; flex-wrap:wrap; justify-content:flex-end; }
   .actions button { white-space:nowrap; font-size:13px; }
   .chart { position:relative; width:200px; height:44px; margin-top:4px; }
-  .chart svg { display:block; overflow:visible; }
+  .chart svg { display:block; overflow:visible; max-width:100%; }
   .chart .tip { position:absolute; pointer-events:none; background:var(--tip-bg); color:var(--tip-fg); font-size:11px; padding:3px 6px; border-radius:5px;
                 white-space:nowrap; transform:translate(-50%,-130%); display:none; z-index:2; }
 
@@ -340,7 +347,7 @@
         <div class="feat"><div class="ic">👕</div><b>Your size, specifically</b><span>Pick from the sizes on the page. Get a restock alert when yours is back, not when someone else's is.</span></div>
         <div class="feat"><div class="ic">🎯</div><b>Target price</b><span>Set one and only hear when it's hit. Skip it and you're told about any real drop.</span></div>
         <div class="feat"><div class="ic">📈</div><b>Full history</b><span>A price chart, the low and high, every check and every alert, per item.</span></div>
-        <div class="feat"><div class="ic">⚡</div><b>Check now</b><span>New items get their first price within about 15 minutes. Jump the queue whenever you want.</span></div>
+        <div class="feat"><div class="ic">⚡</div><b>Check now</b><span>New items get their first price within about 5 minutes. Jump the queue whenever you want.</span></div>
         <div class="feat"><div class="ic">🔒</div><b>Yours alone</b><span>Your items are visible only to you, enforced in the database. Export or delete everything anytime.</span></div>
       </div>
     </section>
@@ -356,7 +363,7 @@
     <section class="land-section faq" id="faq">
       <h2>Questions</h2>
       <details><summary>Is it really free?</summary><p>Yes. It runs on free tiers end to end. The only limit is 100 tracked items per account.</p></details>
-      <details><summary>How often are prices checked?</summary><p>Every item is re-checked about every 6 hours. New items and "check now" requests run on the next pass, within about 15 minutes.</p></details>
+      <details><summary>How often are prices checked?</summary><p>Every item is re-checked about every 5 minutes. New items and "check now" requests run on the next pass, within about 5 minutes.</p></details>
       <details><summary>Why Telegram?</summary><p>It's free, instant, and doesn't need your phone number. You connect once from inside the app; alerts go to your own chat.</p></details>
       <details><summary>What if a store blocks bots?</summary><p>The tracker falls back to a real browser, and if a store still says no you'll see a plain-language note on the item instead of a cryptic error. It keeps trying.</p></details>
       <details><summary>Does it work on my phone?</summary><p>Yes. Add it to your home screen and it behaves like an app, and you can share a product link straight to it from the store's app or browser.</p></details>
@@ -413,7 +420,9 @@
                q: $("#q"), sort: $("#sort"), filters: $("#filters"), menu: $("#menu"), acct: $("#acct"),
                stats: $("#stats"), tabs: $("#tabs"), activity: $("#activity"), start: $("#start"), checkAll: $("#checkAll") };
   const MAX = C.maxItems || 100;
-  const CRON = (C.cronMinutes && C.cronMinutes.length ? C.cronMinutes : [7, 22, 37, 52]).slice().sort((a, b) => a - b);
+  const CRON = (C.cronMinutes && C.cronMinutes.length ? C.cronMinutes : [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]).slice().sort((a, b) => a - b);
+  const INTERVAL_MIN = C.checkIntervalMinutes || (C.checkIntervalHours ? C.checkIntervalHours * 60 : 5);
+  const every = INTERVAL_MIN >= 60 ? `every ${+(INTERVAL_MIN / 60).toFixed(1)} hour${INTERVAL_MIN === 60 ? "" : "s"}` : `every ${Math.round(INTERVAL_MIN)} minutes`;
 
   if (!C.supabaseUrl || !C.supabaseAnonKey) {
     el.landing.hidden = el.nav.hidden = false; $("#google").disabled = true;
@@ -453,7 +462,8 @@
     el.toast.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => el.toast.style.display = "none", ms || 3200); };
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const SYM = { USD:"$", EUR:"€", GBP:"£", JPY:"¥", CAD:"CA$", AUD:"A$" };
-  const fmt = (v, cur) => v == null ? "" : (SYM[cur] ?? "") + (cur === "JPY" || cur === "KRW" ? Math.round(v).toLocaleString() : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) + (SYM[cur] ? "" : (cur ? " " + cur : ""));
+  const ZERO_DEC = { JPY: 1, KRW: 1, HUF: 1 };
+  const fmt = (v, cur) => v == null ? "" : (SYM[cur] ?? "") + (ZERO_DEC[cur] ? Math.round(v).toLocaleString() : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) + (SYM[cur] ? "" : (cur ? " " + cur : ""));
   const ago = (iso) => { if (!iso) return "never"; const s = (Date.now() - new Date(iso)) / 1000; if (s < 60) return "just now"; if (s < 3600) return Math.floor(s/60) + "m ago"; if (s < 86400) return Math.floor(s/3600) + "h ago"; return Math.floor(s/86400) + "d ago"; };
   const dateShort = (iso) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const dateTime = (iso) => new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -469,6 +479,9 @@
   function stepMs() { return CRON.length > 1 ? (CRON[1] - CRON[0]) * 60000 : 3600000; }
   const inMin = () => Math.max(1, Math.round((nextRun() - Date.now()) / 60000));
   const soon = () => `in ~${inMin()} min`;
+  const soonShort = () => `~${inMin()}m`;
+  // countdowns are rendered as <span class="next"> / <b class="next-short"> so a timer can refresh them without redrawing the list
+  const tickCountdowns = () => { document.querySelectorAll(".next").forEach((n) => n.textContent = soon()); document.querySelectorAll(".next-short").forEach((n) => n.textContent = soonShort()); };
 
   // strip tracking params so the same product pasted twice is recognised and stores get a clean link
   const TRACK = /^(utm_.*|fbclid|gclid|dclid|msclkid|mc_cid|mc_eid|ref|ref_|_ga|gbraid|wbraid|igshid|srsltid|ttclid|twclid|yclid|cmpid|campaign_id|affiliate|aff_id|clickid|click_id|_hsenc|_hsmi|mkt_tok|si)$/i;
@@ -486,7 +499,10 @@
   }
   const STORE_NAMES = { nike:"Nike", endclothing:"END.", ssense:"SSENSE", zara:"Zara", uniqlo:"Uniqlo", grailed:"Grailed", amazon:"Amazon" };
   function storeName(it) {
-    let key = it.store; if (!key) { try { key = new URL(it.url).hostname.toLowerCase().replace(/^(www|shop|store|m|us|uk|en)\./, "").split(".")[0]; } catch (e) { key = ""; } }
+    let key = it.store;
+    if (!key) { try { let h = new URL(it.url).hostname.toLowerCase(), p;   // strip stacked prefixes: www2.shop.example.com -> example
+                      do { p = h; h = h.replace(/^(www\d*|shop|store|m|us|uk|en|ca|au|eu)\./, ""); } while (h !== p);
+                      key = h.split(".")[0]; } catch (e) { key = ""; } }
     return STORE_NAMES[key] || (key ? key.charAt(0).toUpperCase() + key.slice(1) : "");
   }
   // a readable placeholder name from the link, until the first check reads the real one
@@ -501,8 +517,9 @@
     } catch (e) { return null; }
   }
   // same normalisation the checker uses, so the app can tell whether your size was found on the page
-  const ALIAS = { xxs:"xxs","xx-small":"xxs", xs:"xs","x-small":"xs", s:"s", small:"s", sm:"s", m:"m", medium:"m", med:"m", l:"l", large:"l", lg:"l",
-                  xl:"xl","x-large":"xl", xxl:"xxl","xx-large":"xxl","2xl":"xxl", xxxl:"xxxl","3xl":"xxxl" };
+  const ALIAS = { xxs:"xxs","xx-small":"xxs","extra extra small":"xxs", xs:"xs","x-small":"xs","extra small":"xs", s:"s", small:"s", sm:"s",
+                  m:"m", medium:"m", med:"m", l:"l", large:"l", lg:"l", xl:"xl","x-large":"xl","extra large":"xl",
+                  xxl:"xxl","xx-large":"xxl","2xl":"xxl","2x-large":"xxl", xxxl:"xxxl","3xl":"xxxl","3x-large":"xxxl" };
   const normSize = (s) => { s = String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ").replace(/^(us|uk|eu|size) /, ""); return ALIAS[s] || s; };
   const sizesOf = (it) => { try { const o = it.sizes_json ? JSON.parse(it.sizes_json) : null; return o && typeof o === "object" ? o : null; } catch (e) { return null; } };
   const sizeMatch = (it) => { const sz = sizesOf(it); if (!it.size || !sz) return null; const want = normSize(it.size); return Object.keys(sz).find((k) => normSize(k) === want) ?? false; };
@@ -517,7 +534,7 @@
   }
 
   // ---- auth ---------------------------------------------------------------
-  $("#google").onclick = () => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: here } });
+  $("#google").onclick = async () => { const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: here } }); if (error) toast(error.message, 6000); };
   $("#magic").onsubmit = async (e) => { e.preventDefault(); const f = e.target, email = f.email.value.trim(); const b = f.querySelector("button"); b.disabled = true;
     const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: here } }); b.disabled = false;
     toast(error ? error.message : "Check your email for the sign-in link. It's valid for a few minutes.", 6000); };
@@ -556,7 +573,7 @@
     loaded = true;
     renderTelegram();
     draw();
-    el.foot.innerHTML = `New items and "check now" run <span class="next">${soon()}</span>. After that, every item is re-checked about every ${C.checkIntervalHours || 6} hours.
+    el.foot.innerHTML = `New items and "check now" run <span class="next">${soon()}</span>. After that, every item is re-checked about ${every}.
       <br>Shortcuts: <kbd>n</kbd> new item · <kbd>/</kbd> search · <kbd>Esc</kbd> close`;
     applyPendingAdd();
   }
@@ -569,16 +586,16 @@
     const link = `https://t.me/${C.telegramBot}?start=${user.id}`;
     $("#menuTg").innerHTML = !C.telegramBot ? `<div>Telegram<small>not set up on this deployment</small></div>`
       : linked ? `<div>Telegram<small>connected${profile.telegram_name ? " as " + esc(profile.telegram_name) : ""}</small></div><button class="link small" data-tg="off">disconnect</button>`
-      : `<div>Telegram<small>not connected. No alerts yet.</small></div><a href="${link}" target="_blank" rel="noopener"><button class="small" type="button" data-tg="on">Connect</button></a>`;
+      : `<div>Telegram<small>not connected. No alerts yet.</small></div><a class="abtn small" href="${link}" target="_blank" rel="noopener" data-tg="on">Connect</a>`;
     if (linked || !C.telegramBot) { el.tg.hidden = true; if (linked) try { localStorage.removeItem(tgWaitKey); } catch (e) {} return; }
     el.tg.hidden = false;
     if (tgWaiting()) {
-      el.tg.innerHTML = `<span><span class="spin"></span>Waiting for Telegram. Press <b>Start</b> in the bot chat if you haven't. The link is confirmed on the next check run (${soon()}); this page updates itself.</span>
-        <span><a href="${link}" target="_blank" rel="noopener"><button class="small" type="button" data-tg="on">Open Telegram again</button></a> <button class="link small" data-tg="cancel">cancel</button></span>`;
+      el.tg.innerHTML = `<span><span class="spin"></span>Waiting for Telegram. Press <b>Start</b> in the bot chat if you haven't. The link is confirmed on the next check run (<span class="next">${soon()}</span>); this page updates itself.</span>
+        <span><a class="abtn small" href="${link}" target="_blank" rel="noopener" data-tg="on">Open Telegram again</a> <button class="link small" type="button" data-tg="cancel">cancel</button></span>`;
       pollTelegram();
     } else {
       el.tg.innerHTML = `<span>Alerts go to Telegram. Connect it once so you actually get them.</span>
-        <a href="${link}" target="_blank" rel="noopener"><button class="primary" type="button" data-tg="on">Connect Telegram</button></a>`;
+        <a class="abtn primary" href="${link}" target="_blank" rel="noopener" data-tg="on">Connect Telegram</a>`;
     }
   }
   document.addEventListener("click", async (e) => {
@@ -595,7 +612,7 @@
     tgTimer = setInterval(async () => {
       if (!user || !tgWaiting()) { clearInterval(tgTimer); tgTimer = null; if (user) renderTelegram(); return; }
       const { data } = await sb.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
-      if (data && data.telegram_chat_id) { profile = data; clearInterval(tgTimer); tgTimer = null; toast("Telegram connected. You'll get alerts there. ✅", 5000); renderTelegram(); }
+      if (data && data.telegram_chat_id) { profile = data; clearInterval(tgTimer); tgTimer = null; toast("Telegram connected. You'll get alerts there. ✅", 5000); renderTelegram(); renderStart(); }
     }, 20000);
   }
 
@@ -654,19 +671,24 @@
     const q = ui.q.trim().toLowerCase();
     let v = items.filter((it) => (ui.filter === "all" || state(it)[ui.filter]) &&
       (!q || [it.name, nameFromUrl(it.url), storeName(it), it.size, it.url].filter(Boolean).join(" ").toLowerCase().includes(q)));
-    const key = { new: (a, b) => b.created_at.localeCompare(a.created_at),
+    return v.sort(SORTS[ui.sort] || SORTS.new);
+  }
+  const byName = (a, b) => (a.name || nameFromUrl(a.url) || a.url).localeCompare(b.name || nameFromUrl(b.url) || b.url);
+  const SORTS = { new: (a, b) => (b.created_at || "").localeCompare(a.created_at || ""),
                   price: (a, b) => ((lastGood(a) || {}).price ?? Infinity) - ((lastGood(b) || {}).price ?? Infinity),
                   drop: (a, b) => dropPct(b) - dropPct(a),
                   alert: (a, b) => ((b.alerts[0] || {}).sent_at || "").localeCompare((a.alerts[0] || {}).sent_at || ""),
-                  name: (a, b) => (a.name || nameFromUrl(a.url) || a.url).localeCompare(b.name || nameFromUrl(b.url) || b.url),
-                  store: (a, b) => storeName(a).localeCompare(storeName(b)) || (a.name || nameFromUrl(a.url) || a.url).localeCompare(b.name || nameFromUrl(b.url) || b.url) }[ui.sort] || (() => 0);
-    return v.sort(key);
-  }
+                  name: byName,
+                  store: (a, b) => storeName(a).localeCompare(storeName(b)) || byName(a, b) };
   function draw() {
     $("#menuCount").textContent = `${items.length} of ${MAX} tracked`;
-    const atCap = items.length >= MAX;
-    $("#add button").disabled = atCap; el.hint.classList.toggle("bad", atCap);
-    el.hint.textContent = atCap ? `You're at the limit of ${MAX} items. Remove some to add more.` : "";
+    const atCap = items.length >= MAX, capMsg = `You're at the limit of ${MAX} items. Remove some to add more.`;
+    $("#add button").disabled = atCap;
+    // only touch the hint for the cap message; a redraw mustn't wipe the link preview the user is looking at
+    if (atCap) { el.hint.textContent = capMsg; el.hint.classList.add("bad"); }
+    else if (el.hint.textContent === capMsg) { el.hint.textContent = ""; el.hint.classList.remove("bad"); }
+    if (!items.length) ui.tab = "items";   // the tabs hide with no items; don't strand the user on the activity pane
+    if (!SORTS[ui.sort]) ui.sort = "new";
     el.sort.value = ui.sort;
     const counts = Object.fromEntries(FILTERS.map(([k]) => [k, k === "all" ? items.length : items.filter((it) => state(it)[k]).length]));
     renderStats(counts); renderStart();
@@ -707,7 +729,7 @@
     const sv = savings(), tiles = [
       ["all", "Tracked", items.length, ""], ["hit", "At target", counts.hit, counts.hit ? "ok" : ""], ["sale", "On sale", counts.sale, counts.sale ? "ok" : ""],
       ["out", "Sold out", counts.out, ""], [null, "Cheaper than first seen", sv.length ? fmt(sv[0][1], sv[0][0]) + (sv.length > 1 ? " +" : "") : "—", sv.length ? "ok" : ""],
-      [null, "Next check", soon().replace("in ~", "~").replace(" min", "m"), ""]];
+      [null, "Next check", soonShort(), "next-short"]];
     el.stats.innerHTML = tiles.map(([k, label, v, cls]) => `<${k ? "button type=\"button\"" : "div"} class="stat${k && ui.filter === k && ui.tab === "items" ? " on" : ""}"${k ? ` data-filter="${k}"` : ""}><small>${label}</small><b class="${cls}">${esc(v)}</b></${k ? "button" : "div"}>`).join("");
   }
   el.stats.addEventListener("click", (e) => { const b = e.target.closest("[data-filter]"); if (b) { ui.filter = b.dataset.filter; ui.tab = "items"; draw(); } });
@@ -748,8 +770,9 @@
     const low = hist.length ? Math.min(...hist.map((h) => h.price)) : null;
     const name = it.name || nameFromUrl(it.url), guess = !it.name;
     const sm = sizeMatch(it), sz = sizesOf(it);
-    const meta1 = [storeName(it), it.size && "size " + it.size, it.target_price != null && "target " + fmt(it.target_price, cur), it.notify_restock && "restock alerts",
-                   it.check_requested ? "check queued " + soon() : la ? "checked " + ago(la.checked_at) : "first check " + soon()].filter(Boolean).join(" · ");
+    const countdown = `<span class="next">${soon()}</span>`;
+    const meta1 = [storeName(it), it.size && "size " + it.size, it.target_price != null && "target " + fmt(it.target_price, cur), it.notify_restock && "restock alerts"]
+                  .filter(Boolean).map(esc).concat(it.check_requested ? "check queued " + countdown : la ? "checked " + esc(ago(la.checked_at)) : "first check " + countdown).join(" · ");
     const badges = [st.hit && `<span class="badge hit">at target</span>`, st.sale && `<span class="badge sale">${pct(last.original_price, last.price)}% off</span>`,
                     st.out && `<span class="badge out">sold out</span>`, !st.out && la && la.in_stock === 1 && `<span class="ok">in stock</span>`,
                     sm === false && `<span class="badge warn">size "${esc(it.size)}" not on page</span>`].filter(Boolean);
@@ -764,10 +787,10 @@
         ${it.image_url ? `<img class="thumb" src="${esc(it.image_url)}" alt="" loading="lazy">` : `<div class="thumb"></div>`}
         <div>
           <a class="name${guess ? " guess" : ""}" href="${esc(it.url)}" target="_blank" rel="noopener" title="Open the product page">${esc(name || it.url)}</a>
-          <div class="meta">${esc(meta1)}</div>
+          <div class="meta">${meta1}</div>
           <div class="meta">${meta2}</div>
         </div>
-        <div class="side">${price}<div class="chart" id="chart-${it.id}"></div></div>
+        <div class="side">${price}${hist.length > 1 ? `<div class="chart" id="chart-${it.id}"></div>` : ""}</div>
         <div class="actions">
           ${it.active ? `<button class="link" data-act="check" ${it.check_requested ? "disabled" : ""}>${it.check_requested ? "queued" : "check now"}</button>` : ""}
           <button class="link" data-act="edit">edit</button>
@@ -809,7 +832,7 @@
                  last && `now <b>${fmt(last.price, cur)}</b>`, hist.length > 1 && `avg <b>${fmt(avg, cur)}</b>`, hist.length > 1 && hi > last.price && `<b>${pct(hi, last.price)}%</b> below high`,
                  `${it.price_history.length} check${it.price_history.length === 1 ? "" : "s"}`, `tracked <b>${days}</b> day${days === 1 ? "" : "s"}`].filter(Boolean).map((x) => `<span>${x}</span>`).join("")}</div>
         ${sizes}</div>
-      <div><h4>History</h4>${rows ? `<table class="hist">${rows}</table>` : `<div class="alist">Nothing yet. First check ${soon()}.</div>`}</div>
+      <div><h4>History</h4>${rows ? `<table class="hist">${rows}</table>` : `<div class="alist">Nothing yet. First check <span class="next">${soon()}</span>.</div>`}</div>
       <div><h4>Alerts</h4><div class="alist">${al}</div></div>
     </div>`;
   }
@@ -833,11 +856,16 @@
     const show = (i) => { dot.setAttribute("cx", x(i).toFixed(1)); dot.setAttribute("cy", y(pts[i].price).toFixed(1));
       tip.textContent = `${fmt(pts[i].price, it.currency)} · ${big ? dateTime(pts[i].checked_at) : dateShort(pts[i].checked_at)}`;
       tip.style.left = x(i) + "px"; tip.style.top = y(pts[i].price) + "px"; tip.style.display = "block"; };
-    const idx = (e) => { const r = svg.getBoundingClientRect(); return Math.max(0, Math.min(pts.length - 1, Math.round((e.clientX - r.left - pad) / (W - 2 * pad) * (pts.length - 1)))); };
+    const idx = (e) => { const r = svg.getBoundingClientRect(); return Math.max(0, Math.min(pts.length - 1, Math.round((e.clientX - r.left - pad) / ((r.width || W) - 2 * pad) * (pts.length - 1)))); };
     svg.addEventListener("mousemove", (e) => show(idx(e)));
     svg.addEventListener("touchmove", (e) => { show(idx(e.touches[0])); e.stopPropagation(); }, { passive: true });
     svg.addEventListener("mouseleave", () => { tip.style.display = "none"; dot.setAttribute("cx", x(pts.length-1).toFixed(1)); dot.setAttribute("cy", y(vals[vals.length-1]).toFixed(1)); });
   }
+  // charts are drawn at a fixed pixel width; redraw them when the viewport changes (phone rotation, window resize)
+  window.addEventListener("resize", () => { clearTimeout(spark.rt); spark.rt = setTimeout(() => {
+    if (!loaded || el.list.hidden) return;
+    items.forEach((it) => { const c = document.getElementById("chart-" + it.id); if (c) spark(c, it, false);
+                            const b = document.getElementById("bigchart-" + it.id); if (b) spark(b, it, true); }); }, 150); });
 
   // ---- actions --------------------------------------------------------------
   const addForm = $("#add");
@@ -872,7 +900,7 @@
     const url = cleanUrl(f.url.value); if (!url) return toast("Paste a full link starting with http(s)://");
     if (/^https?:\/\/[^/]*(google|bing|duckduckgo)\./i.test(url)) return toast("That's a search page. Open the product itself and copy its address.");
     const size = f.size.value.trim() || null;
-    const dupe = items.find((i) => i.url === url && (i.size || "") === (size || ""));
+    const dupe = items.find((i) => i.url === url && normSize(i.size) === normSize(size));   // "m" and "M" are the same size
     if (dupe) { flashRow(dupe.id); return toast("You're already tracking this link" + (size ? " in that size" : "") + "."); }
     if (items.length >= MAX) return toast(`You're at the limit of ${MAX} items.`);
     const rec = { user_id: user.id, url, size, target_price: f.target.value ? Number(f.target.value) : null,
@@ -891,6 +919,7 @@
   el.list.addEventListener("click", async (e) => {
     const itemEl = e.target.closest(".item"); if (!itemEl) return;
     const id = Number(itemEl.dataset.id), it = items.find((i) => i.id === id);
+    if (!it) return;   // stale row (item removed by another tab or a refresh in flight)
     const b = e.target.closest("button[data-act], button[data-pick], button[data-size], button[data-tq]");
     if (b && b.dataset.tq != null) { const f = b.closest("form"); f.target.value = b.dataset.tq; f.target.focus(); return; }
     if (b && b.dataset.size != null) { const f = b.closest("form"); f.size.value = b.dataset.size; f.querySelectorAll("[data-size]").forEach((x) => x.classList.toggle("on", x === b)); return; }
@@ -931,13 +960,15 @@
 
   // ---- keep the page fresh: ~2.5 min after each cron run, quietly reload once ---------------
   let seenRun = 0;
+  // a quiet reload redraws the list, which would throw away an edit in progress; wait until the user is done
+  const busy = () => ui.editing != null || (document.activeElement && el.list.contains(document.activeElement));
   setInterval(() => {
-    if (!user || !loaded || document.visibilityState !== "visible") return;
+    tickCountdowns();
+    if (!user || !loaded || document.visibilityState !== "visible" || busy()) return;
     const lastRun = nextRun().getTime() - stepMs(), since = Date.now() - lastRun;
     if (since > 150000 && since < 600000 && lastRun !== seenRun) { seenRun = lastRun; render(true); }
-    el.foot.querySelectorAll(".next").forEach((n) => n.textContent = soon());
   }, 30000);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && user && loaded && Date.now() - (render.at || 0) > 120000) render(true); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && user && loaded && !busy() && Date.now() - (render.at || 0) > 120000) render(true); });
 })();
 </script>
 </body>

@@ -5,7 +5,7 @@ import os, subprocess, sys, time
 from playwright.sync_api import sync_playwright
 SCR = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(SCR)
 fake = open(SCR + "/fake_supabase.js").read()
-cfg = 'window.PW_CONFIG={supabaseUrl:"https://x.supabase.co",supabaseAnonKey:"k",telegramBot:"sid_watch_bot",checkIntervalHours:6,maxItems:100,cronMinutes:[7,22,37,52]};'
+cfg = 'window.PW_CONFIG={supabaseUrl:"https://x.supabase.co",supabaseAnonKey:"k",telegramBot:"sid_watch_bot",checkIntervalMinutes:5,maxItems:100,cronMinutes:[0,5,10,15,20,25,30,35,40,45,50,55]};'
 srv = subprocess.Popen([sys.executable, "-m", "http.server", "8765", "--bind", "127.0.0.1"], cwd=ROOT + "/web", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 time.sleep(0.8)
 errors = []
@@ -41,6 +41,8 @@ try:
         check(page.is_visible("#start") and page.locator("#start .st.done").count() == 0, "getting-started checklist shown with nothing done")
         check(page.is_hidden("#stats") and page.is_hidden("#tabs"), "stats strip and tabs hidden with no items")
         check(page.is_visible("#tg") and "Connect Telegram" in page.text_content("#tg"), "telegram notice shown when not linked")
+        check(page.locator("#tg a[data-tg=on][href^='https://t.me/sid_watch_bot?start=']").count() == 1 and page.locator("#tg a button").count() == 0,
+              "connect telegram is a plain link, not a button inside a link")
         check(page.is_hidden("#toolbar"), "toolbar hidden with no items")
 
         # add an item, with tracking junk in the url
@@ -53,6 +55,7 @@ try:
         row = page.locator(".item").first
         check("Dunk Low Retro Mens Shoes" in row.text_content(), "row shows guessed name before first check")
         check("check queued in ~" in row.text_content(), "row says check is queued with countdown")
+        check(row.locator(".meta .next").count() == 1, "countdown is a live span the timer can refresh")
         check(row.locator("button[data-act=check]").is_disabled(), "check-now button disabled while queued")
         stored = page.evaluate("window.__fake.state.tables.items[0]")
         check(stored["url"] == "https://www.nike.com/t/dunk-low-retro-mens-shoes-76KnBL/DD1391-100", "tracking params stripped: " + stored["url"])
@@ -64,6 +67,9 @@ try:
         page.fill("#add input[name=size]", "M"); page.click("#add button[type=submit]")
         page.wait_for_function("document.querySelector('#toast').textContent.includes('already tracking')")
         check(page.evaluate("window.__fake.state.tables.items.length") == 1, "duplicate link+size rejected")
+        page.fill("#add input[name=size]", "m"); page.click("#add button[type=submit]")
+        page.wait_for_function("document.querySelector('#toast').textContent.includes('already tracking')")
+        check(page.evaluate("window.__fake.state.tables.items.length") == 1, "duplicate with size in a different case rejected")
         page.fill("#add input[name=url]", ""); page.fill("#add input[name=size]", "")
 
         # search page rejected
@@ -87,6 +93,7 @@ try:
         page.reload(); page.wait_for_selector(".item"); page.wait_for_function("document.querySelectorAll('.item').length === 2")
         check(page.is_visible("#toolbar"), "toolbar visible with 2 items")
         st = page.text_content("#stats")
+        check(page.locator("#stats .next-short").count() == 1, "next-check tile is a live countdown")
         check(page.is_visible("#stats") and "Tracked2" in st.replace("\n", "") and "On sale1" in st.replace("\n", "") and "$30.00" in st, "stats strip: counts and savings vs first seen: " + st.replace("\n", " "))
         page.click("#stats [data-filter=sale]"); check(page.locator(".item").count() == 1 and page.locator("#stats .stat.on").count() == 1, "stat tile filters the list")
         page.click("#stats [data-filter=all]")

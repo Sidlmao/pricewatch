@@ -29,16 +29,16 @@ jobs:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
           TELEGRAM_BOT: ${{ vars.TELEGRAM_BOT }}
-          CHECK_INTERVAL_HOURS: ${{ vars.CHECK_INTERVAL_HOURS || '6' }}
+          CHECK_INTERVAL_MINUTES: ${{ vars.CHECK_INTERVAL_MINUTES || '5' }}
           MAX_ITEMS_PER_USER: ${{ vars.MAX_ITEMS_PER_USER || '100' }}
-          CRON_MINUTES: "7,22,37,52"     # must match the schedule in check.yml
+          CRON_MINUTES: "0,5,10,15,20,25,30,35,40,45,50,55"     # must match the schedule in check.yml (*/5)
         run: |
           cat > web/config.js <<CFG
           window.PW_CONFIG = {
             supabaseUrl: "${SUPABASE_URL}",
             supabaseAnonKey: "${SUPABASE_ANON_KEY}",
             telegramBot: "${TELEGRAM_BOT}",
-            checkIntervalHours: ${CHECK_INTERVAL_HOURS},
+            checkIntervalMinutes: ${CHECK_INTERVAL_MINUTES},
             maxItems: ${MAX_ITEMS_PER_USER},
             cronMinutes: [${CRON_MINUTES}],
           };

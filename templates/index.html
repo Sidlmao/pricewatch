@@ -98,10 +98,10 @@
   {% endfor %}
 
   {% if static %}
-  <p class="hint">Built {{ built_at }}. Checks run every 6 hours. Dashed line on the chart is your target price.
+  <p class="hint">Built {{ built_at }}. Checks run every 5 minutes. Dashed line on the chart is your target price.
   {% if manage_url %}<br>To add or remove items, use the <a href="{{ manage_url }}">manage items</a> workflow (the # is the item id).{% endif %}</p>
   {% else %}
-  <p class="hint">Checks run every 6 hours via GitHub Actions. Dashed line on the chart is your target price.</p>
+  <p class="hint">Checks run every 5 minutes via GitHub Actions. Dashed line on the chart is your target price.</p>
   {% endif %}
 </main>
 </body>
